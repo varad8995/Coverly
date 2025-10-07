@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+*.env
+*.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs / PIDs
+*.log
+*.pid
+
+# Docker
+docker-compose.override.yml
+*.swp
+
+# Databases
+*.sqlite3
+*.db
+postgres_data/
+supabase_data/
+
+# Redis
+dump.rdb
+
+# macOS
+.DS_Store

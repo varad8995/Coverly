@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  valkey:
+    image: valkey/valkey:latest
+    container_name: valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+
+  api:
+    build: .
+    container_name: coverly-api
+    depends_on:
+      - valkey
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+    working_dir: /app
+    command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+
+
+
+volumes:
+  valkey-data:
