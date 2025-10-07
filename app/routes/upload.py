@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, File, UploadFile
 from typing import List, Optional
 from dotenv import load_dotenv
 from ..services.queue import enqueue_job
-from db.supabase_client import supabase
+from ..db.supabase_client import supabase
 
 import os
 import uuid
