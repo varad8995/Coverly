@@ -8,14 +8,11 @@ from app.services.youtube_service import fetch_top_videos
 from app.services.openai import thumbnail_generation
 from app.services.gemini_image_generation import thumbnail_generation2
 from redis.asyncio import Redis
-
+from db.supabase_client import supabase
 
 load_dotenv()
 
-# --- Supabase Setup ---
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
 
 QUEUE_NAME = "job_queue"
 redis_conn = Redis(host="localhost", port=6379, db=0, decode_responses=True) 
