@@ -2,7 +2,8 @@ from fastapi import APIRouter, Form, File, UploadFile
 from typing import List, Optional
 from dotenv import load_dotenv
 from ..services.queue import enqueue_job
-from supabase import create_client
+from db.supabase_client import supabase
+
 import os
 import uuid
 
@@ -10,9 +11,6 @@ load_dotenv()
 
 router = APIRouter()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 
