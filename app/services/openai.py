@@ -47,12 +47,12 @@ def build_thumbnail_system_prompt(refined_prompt: str, reference_images_base64: 
 
 # TODO: Refactor this remove hardcoded image path and pass actual images
 
-local_filename= "/Users/varadbhalsing/Documents/AI-thumbnail-generator/Coverly/app/services/varad.jpeg"
+# local_filename= "/Users/varadbhalsing/Documents/AI-thumbnail-generator/Coverly/app/services/varad.jpeg"
 
-with open(local_filename, "rb") as image_file:
-    image_bytes = image_file.read()
-    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-    print("Image successfully converted to base64!")
+# with open(local_filename, "rb") as image_file:
+#     image_bytes = image_file.read()
+#     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+#     print("Image successfully converted to base64!")
 
 async def thumbnail_generation(refined_prompt: str, reference_images, youtube_reference_images):
 
@@ -62,11 +62,11 @@ async def thumbnail_generation(refined_prompt: str, reference_images, youtube_re
 
     response = client.images.edit(
         model="gpt-image-1",
-        image=open("/Users/varadbhalsing/Documents/AI-thumbnail-generator/Coverly/app/services/varad.jpeg", "rb"),     
+        # image=open("/Users/varadbhalsing/Documents/AI-thumbnail-generator/Coverly/app/services/varad.jpeg", "rb"),     
         prompt=prompt_text,  
         size="1024x1024",
         input_fidelity="high",
-        mask= open("/Users/varadbhalsing/Documents/AI-thumbnail-generator/Coverly/app/services/varad.jpeg", "rb"),     
+        # mask= open("/Users/varadbhalsing/Documents/AI-thumbnail-generator/Coverly/app/services/varad.jpeg", "rb"),     
 
     )
     output_data = {
