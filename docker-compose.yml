@@ -24,7 +24,21 @@ services:
     working_dir: /app
     command: uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 
-
+  worker:
+    build: .
+    container_name: coverly-worker
+    depends_on:
+      - valkey
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      REDIS_HOST: valkey
+      REDIS_PORT: 6379
+      PYTHONUNBUFFERED: 1  
+    volumes:
+      - ./:/app
+    working_dir: /app/app
+    command: python scripts/worker.py
 
 volumes:
   valkey-data:
