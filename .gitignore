@@ -45,3 +45,4 @@ dump.rdb
 
 *.png
 *.jpeg
+*test.py
