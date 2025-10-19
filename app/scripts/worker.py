@@ -2,13 +2,12 @@ import asyncio
 import json
 import os
 from dotenv import load_dotenv
-from supabase import create_client
 from app.services.refine_prompts import refine_prompt, extarct_title
 from app.services.youtube_service import fetch_top_videos
 from app.services.openai import thumbnail_generation
 from app.services.gemini_image_generation import thumbnail_generation2
 from redis.asyncio import Redis
-from db.supabase_client import supabase
+from app.db.supabase_client import supabase
 
 load_dotenv()
 
