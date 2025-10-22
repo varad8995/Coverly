@@ -21,7 +21,10 @@ router = APIRouter()
 )
 async def upload_prompt_with_images(
     user_query: Optional[str] = Form(None),
+    aspect_ratio: Optional[str] = Form("16:9"),
+    platform: Optional[str] = Form("YouTube"),
     reference_images: Optional[List[UploadFile]] = File(None),
+    
 ):
     job_id = str(uuid.uuid4())
     image_urls: List[str] = []
@@ -51,6 +54,8 @@ async def upload_prompt_with_images(
             "job_id": job_id,
             "user_query": user_query,
             "reference_images": image_urls or [],
+            "aspect_ratio": aspect_ratio,    
+            "platform": platform,   
             "status": "queued",
         }
 
