@@ -63,6 +63,8 @@ class ThumbnailState(TypedDict, total=False):
     reference_images: List[str]
     youtube_examples: List[dict]
     generated_images: List[str]
+    aspect_ratio: str   
+    platform: str  
     status: str
 
 
@@ -89,8 +91,8 @@ async def refine_prompt_node(state: ThumbnailState) -> dict:
     job_id = state["job_id"]
     try:
         await db_update("thumbnail_prompts", {"status": "refining_prompt"}, job_id)
-        refined_prompt = await refine_prompt(state["user_query"])
-        title = await extract_title(refined_prompt)
+        refined_prompt = await refine_prompt(state["user_query"],aspect_ratio=state.get("aspect_ratio", "16:9"),platform=state.get("platform", "YouTube"))
+        title = await extract_title(refined_prompt,platform=state.get("platform", "YouTube"))
         await publish_job_update(job_id, "refining_prompt")
 
         await db_update("thumbnail_prompts", {
@@ -135,7 +137,7 @@ async def generate_openai_node(state: ThumbnailState) -> dict:
     ref_images = state.get("reference_images", [])
     await publish_job_update(job_id, "generating_openai")
 
-    image_base64 = await thumbnail_generation(prompt, ref_images, [])
+    image_base64 = await thumbnail_generation(prompt, ref_images, [],aspect_ratio=state.get("aspect_ratio", "16:9"),platform=state.get("platform", "YouTube"))
 
     signed_url, s3_key = upload_base64_to_s3(image_base64, job_id)
 
@@ -168,7 +170,6 @@ async def generate_gemini_node(state: ThumbnailState) -> dict:
         await publish_job_update(job_id, "generating_gemini")
 
         cached = await redis_conn.get(f"img_cache:{cache_key}")
-        print(cached)
         if cached:
             print(f"[Cache Hit] Job {job_id} (Gemini)")
             cached_data = json.loads(cached)
@@ -185,8 +186,7 @@ async def generate_gemini_node(state: ThumbnailState) -> dict:
             return {"generated_imag_gemini": presigned_urls, "status": "completed"}
 
         await db_update("thumbnail_prompts", {"status": "generating_gemini"}, job_id)
-
-        result = await thumbnail_generation_gemini(prompt, ref_images, youtube_examples, job_id)
+        result = await thumbnail_generation_gemini(prompt, ref_images, youtube_examples, job_id,aspect_ratio=state.get("aspect_ratio", "16:9"),platform=state.get("platform", "YouTube"))
         image_urls = result["image_urls"]
         await redis_conn.setex(
             f"img_cache:{cache_key}",
@@ -217,12 +217,26 @@ graph.add_node("fetch_youtube", fetch_youtube_node)
 graph.add_node("generate_openai", generate_openai_node)
 graph.add_node("generate_gemini", generate_gemini_node)
 
-graph.add_edge("refine_prompt", "fetch_youtube")
+def decide_next(state):
+    if state.get("platform") == "YouTube":
+        return "fetch_youtube"
+    else:
+        return "generate_openai"
+
+graph.add_conditional_edges(
+    "refine_prompt",
+    decide_next,
+    {
+        "fetch_youtube": "fetch_youtube",
+        "generate_openai": "generate_openai",
+    }
+)
+
 graph.add_edge("fetch_youtube", "generate_openai")
 graph.add_edge("fetch_youtube", "generate_gemini")
 graph.set_entry_point("refine_prompt")
+graph.compile()
 
-graph.compile()  
 
 # ------------------------------
 # Worker loop
@@ -250,12 +264,15 @@ async def worker_loop():
                 "job_id": record["job_id"],
                 "user_query": record.get("user_query", ""),
                 "reference_images": record.get("reference_images", []),
-                "youtube_examples": record.get("youtube_examples", [])
+                "youtube_examples": record.get("youtube_examples", []),
+                "platform": record.get("platform", "YouTube"),
+                "aspect_ratio": record.get("aspect_ratio", "16:9"),
             }
 
             state.update(await refine_prompt_node(state))
 
-            state.update(await fetch_youtube_node(state))
+            if state.get("platform") == "YouTube":
+                state.update(await fetch_youtube_node(state))
 
             openai_result, gemini_result = await asyncio.gather(
                 generate_openai_node(state),
@@ -275,6 +292,7 @@ async def worker_loop():
         except Exception as e:
             print(f"[Worker Error] Job {job_id} failed: {e}")
             await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+
 
 
 
