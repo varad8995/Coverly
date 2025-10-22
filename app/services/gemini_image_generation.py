@@ -9,6 +9,10 @@ from io import BytesIO
 from io import BytesIO
 from PIL import Image
 from google import genai
+from google.genai import types
+
+
+
 from dotenv import load_dotenv
 from ..utils.helper import upload_to_s3_bytes
 from ..utils.system_prompts import build_thumbnail_system_prompt_gemini
@@ -42,10 +46,10 @@ def pil_to_inline_data(image: Image.Image, mime_type="image/jpeg"):
         "data": buffer.getvalue()
     }
 
-async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls: list, youtube_image_urls: list,job_id: str):
-    prompt_text = build_thumbnail_system_prompt_gemini()
+async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls: list, youtube_image_urls: list,job_id: str,aspect_ratio=str,platform=str):
+    prompt_text = build_thumbnail_system_prompt_gemini(aspect_ratio,platform)
 
-
+    
     if not isinstance(youtube_image_urls, list):
         youtube_image_urls = [youtube_image_urls]
 
@@ -53,7 +57,8 @@ async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls:
         item["thumbnail_url"] if isinstance(item, dict) else item
         for item in youtube_image_urls
     ]
-    print(all_urls)
+    all_urls = [url for url in all_urls if url]
+
     images = await fetch_all_images(all_urls)
     
     presenter_image = images[0]
@@ -77,7 +82,12 @@ async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls:
                             {"inline_data": ref1_inline},
                         ]
                     }
-                ]
+                ],
+                config=types.GenerateContentConfig(
+                image_config=types.ImageConfig(
+                    aspect_ratio=aspect_ratio,
+                )
+    )
             )
     else:
         response = client.models.generate_content(
