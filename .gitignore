@@ -41,3 +41,8 @@ dump.rdb
 
 # macOS
 .DS_Store
+
+
+*.png
+*.jpeg
+*test.py

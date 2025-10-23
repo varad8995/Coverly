@@ -1,53 +1,67 @@
 from openai import OpenAI
 from dotenv import load_dotenv
-import os 
+from langsmith import traceable
+import os
+
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-async def refine_prompt(user_prompt:str) -> str:
+
+@traceable(
+    name="OpenAI Prompt Refinement",
+    metadata={"model": "gpt-4.1-mini", "tool": "refine_prompt"}
+)
+
+async def refine_prompt(user_prompt: str) -> str:
+    """
+    Refines a user-provided prompt to make it clearer, more detailed, and actionable.
+    Ensures any reference images are respected (faces unchanged).
+    """
     prompt = f"""
-    Your task is to refine the following user prompt to make it clearer and more effective for achieving the intended task. The refinement should focus on enhancing clarity, incorporating necessary details, and specifying task-specific requirements.
+    You are an AI assistant specialized in refining prompts for maximum clarity and effectiveness.
 
     Original Prompt:
     {user_prompt}
 
-    Guidelines for Refinement:
+    Guidelines:
+    - Make the task clearly defined and easy to understand.
+    - Preserve any reference images exactly (do not alter faces or main elements).
+    - Add necessary context or details to increase relevance.
+    - Specify steps if applicable.
+    - Provide an example or template for the desired output format.
 
-    Ensure that the task is clearly defined and easy to understand;
-    Add specific details or context to increase relevance;
-    Specify any steps required to complete the task, if applicable;
-    Provide an example or template to guide the desired output format.
-    Please begin with your refinement according to these guidelines.
+    Refine the original prompt following these guidelines.
     """
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",  # upgraded model
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.8,
+        temperature=0.7,
     )
-
     return response.choices[0].message.content.strip()
 
 
-
-async def extarct_title(user_prompt: str) -> str:
+@traceable(
+    name="OpenAI YouTube Title Generation",
+    metadata={"model": "gpt-4.1-mini", "tool": "extract_title"}
+)
+async def extract_title(video_context: str) -> str:
+    """
+    Generates a catchy, SEO-optimized YouTube title from a video description or context.
+    Returns only the title.
+    """
     prompt = f"""
-    You are an ai assistant who is expert in creating catchy and trending youtube titles.
-    Your task is to transform the given video context or description into a catchy YouTube video title that maximizes search performance and click-through rate.
+    You are an expert AI in creating trending and clickable YouTube titles.
 
-    The context/description for the video is provided below, surrounded by curly braces:
-    
-    User prompt:
-    "{user_prompt}"
+    Video Context:
+    "{video_context}"
 
-    and turn it into a catchy YouTube video title 
-    that would perform well in search and click-through rate.
-    Respond with only the title.
+    Generate a catchy, search-optimized YouTube title that maximizes click-through rate.
+    Respond with **only the title**.
     """
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",  # upgraded model
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.8,
+        temperature=0.7,
     )
-
     return response.choices[0].message.content.strip()

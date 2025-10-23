@@ -1,211 +1,282 @@
-import asyncio
-import json
 import os
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, "../.."))
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
+
 from dotenv import load_dotenv
-from app.services.refine_prompts import refine_prompt, extarct_title
+from typing import TypedDict, List
+from app.db.queue_connection import redis_conn, dequeue_job
+from app.services.refine_prompts import refine_prompt, extract_title
 from app.services.youtube_service import fetch_top_videos
 from app.services.openai import thumbnail_generation
-from app.services.gemini_image_generation import thumbnail_generation2
-from redis.asyncio import Redis
+from app.services.gemini_image_generation import thumbnail_generation_gemini
 from app.db.supabase_client import supabase
+from app.utils.helper import upload_base64_to_s3, generate_presigned_url,compute_cache_key,publish_job_update
+from langgraph.graph import StateGraph
+from langsmith import traceable, Client
+import logging
+import builtins
+import asyncio
+import json
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    stream=sys.stdout,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("coverly.worker")
+
+_original_print = builtins.print
+def _print(*args, sep=" ", end="\n", file=None, flush=False, level="info"):
+    try:
+        message = sep.join(str(a) for a in args)
+        if message.endswith("\n"):
+            message = message[:-1]
+        if hasattr(logger, level):
+            getattr(logger, level)(message)
+        else:
+            logger.info(message)
+    except Exception:
+        _original_print(*args, sep=sep, end=end, file=file, flush=flush)
+
+builtins.print = _print
+
+
+
+
 
 load_dotenv()
 
 
-
-QUEUE_NAME = "job_queue"
-redis_conn = Redis(host="localhost", port=6379, db=0, decode_responses=True) 
-
-print("[Worker] Connected to Valkey")
-
-# --- Queue helpers ---
-
-async def enqueue_job(job_data):
-    await redis_conn.rpush(QUEUE_NAME, json.dumps(job_data))
+client = Client()
 
 
-async def dequeue_job():
-    job_data = await redis_conn.lpop(QUEUE_NAME)
-    if job_data:
-        return json.loads(job_data)
-    return None
-
-# --- Job Handlers ---
-async def process_refine_user_prompt(job):
-    print(f"[Job] Refining prompt: {job}")
-    user_query = job.get("user_query")
-    job_id = job.get("job_id")
+class ThumbnailState(TypedDict, total=False):
+    user_query: str
+    job_id: str
+    refined_prompt: str
+    title: str
+    reference_images: List[str]
+    youtube_examples: List[dict]
+    generated_images: List[str]
+    status: str
 
 
-    if job_id:
-        supabase.table("thumbnail_prompts").update({"status": "processing"}).eq("job_id", job_id).execute()
-
-    refined_user_prompt = await refine_prompt(user_query)
-    refined_title = await extarct_title(refined_user_prompt)
-
-    if job_id:
-        supabase.table("thumbnail_prompts").update({
-            "refined_prompt": refined_user_prompt,
-            "title": refined_title,
-            "status": "completed"
-        }).eq("job_id", job_id).execute()
-        print("added")
-
-    print(f"[YouTube Auto Search] {user_query} -> {refined_title}")
-
-async def process_youtube_search(job):
-
-    print(f"[Job] YouTube search: {job}")
-
-    title = job.get("title")
-    job_id = job.get("id")
-
-    videos = await fetch_top_videos(title)
-
-    if job_id:
-        supabase.table("thumbnail_prompts").update({
-            "youtube_examples": videos,
-            "status": "completed"
-        }).eq("job_id", job_id).execute()
-
-    print(f"[YouTube Search] {title} -> {len(videos)} videos")
-
-async def process_upload_prompt(job):
-    print(f"[Job] Upload prompt: {job}")
-    reference_images = job.get("reference_images", [])
-    user_query = job.get("user_prompt")
-    job_id = job.get("id")
-
-    uploaded_urls = []
-
-    for img in reference_images:
-        file_bytes = await img.read()
-        file_path = f"references/{img.filename}"
-        res = supabase.storage.from_("thumbnails").upload(
-            path=file_path,
-            file=file_bytes,
-            file_options={"content-type": img.content_type}
-        )
-        if res.get("error"):
-            print(f"[Upload Error] {img.filename}: {res['error']}")
-            continue
-        url = supabase.storage.from_("thumbnails").get_public_url(file_path)
-        uploaded_urls.append(url)
-
-    data = {
-        "reference_images": uploaded_urls,
-        "user_prompt": user_query,
-        "status": "completed",
-        "job_id": job_id
-    }
-
-    if job_id:
-        supabase.table("thumbnail_prompts").update(data).eq("job_id", job_id).execute()
-    else:
-        supabase.table("thumbnail_prompts").insert(data).execute()
-
-    print(f"[Upload Prompt] Saved record for job {job_id}")
+# ------------------------------
+# Supabase helpers
+# ------------------------------
+async def db_update(table: str, data: dict, job_id: str):
+    return await asyncio.to_thread(
+        lambda: supabase.table(table).update(data).eq("job_id", job_id).execute()
+    )
 
 
-async def process_generate_openai_template(job):
+async def db_select(table: str, job_id: str):
+    return await asyncio.to_thread(
+        lambda: supabase.table(table).select("*").eq("job_id", job_id).execute()
+    )
+
+
+# ------------------------------
+# LangGraph nodes
+# ------------------------------
+@traceable(name="Refine Prompt Node")
+async def refine_prompt_node(state: ThumbnailState) -> dict:
+    job_id = state["job_id"]
+    try:
+        await db_update("thumbnail_prompts", {"status": "refining_prompt"}, job_id)
+        refined_prompt = await refine_prompt(state["user_query"])
+        title = await extract_title(refined_prompt)
+        await publish_job_update(job_id, "refining_prompt")
+
+        await db_update("thumbnail_prompts", {
+            "refined_prompt": refined_prompt,
+            "title": title,
+            "status": "refined"
+        }, job_id)
+
+        return {"refined_prompt": refined_prompt, "title": title, "status": "refined"}
     
-    print(f"[Job] Generate Template: {job}")
-
-    job_id = job.get("job_id")
-
-    if job_id:
-        supabase.table("thumbnail_prompts").update({"status": "processing"}).eq("job_id", job_id).execute()
-
-    # Fetch the record to get refined_prompt, reference_images, youtube_examples
-    record_res = supabase.table("thumbnail_prompts").select("*").eq("job_id", job_id).execute()
-
-    if not record_res.data or len(record_res.data) == 0:
-        print(f"[Error] No record found for job_id {job_id}")
-        return
-
-    record = record_res.data[0]
-    refined_prompt = record.get("refined_prompt", "")
-    reference_images = record.get("reference_images", [])
-    youtube_examples = record.get("youtube_examples", [])
-
-    # Generate thumbnails using OpenAI
-    try:
-        generated_image_url = await thumbnail_generation(refined_prompt, reference_images, youtube_examples)
-        if job_id:
-            supabase.table("thumbnail_prompts").update({
-                "generated_images": [generated_image_url],
-                "status": "completed"
-            }).eq("job_id", job_id).execute()
-        print(f"[Template Generation] Generated image for job {job_id}")
     except Exception as e:
-        print(f"[Template Generation Error] Job {job_id} failed: {e}")
-        if job_id:
-            supabase.table("thumbnail_prompts").update({"status": "failed"}).eq("job_id", job_id).execute()
+        await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        print(f"[Error] refine_prompt_node: {e}")
+        return {"status": "failed"}
 
 
-
-async def process_generate_gemini_template(job):
-    print(f"[Job] Generate Template: {job}")
-    job_id = job.get("job_id")
-
-    if job_id:
-        supabase.table("thumbnail_prompts").update({"status": "processing"}).eq("job_id", job_id).execute()
-
-    # Fetch the record to get refined_prompt, reference_images, youtube_examples
-    record_res = supabase.table("thumbnail_prompts").select("*").eq("job_id", job_id).execute()
-    if not record_res.data or len(record_res.data) == 0:
-        print(f"[Error] No record found for job_id {job_id}")
-        return
-
-    record = record_res.data[0]
-    refined_prompt = record.get("refined_prompt", "")
-    reference_images = record.get("reference_images", [])
-    youtube_examples = record.get("youtube_examples", [])
-
-    # Generate thumbnails using Gemini
+@traceable(name="Fetch YouTube Node")
+async def fetch_youtube_node(state: ThumbnailState) -> dict:
+    job_id = state["job_id"]
     try:
-        generated_image_url = await thumbnail_generation2(refined_prompt, reference_images, youtube_examples)
-        if job_id:
-            supabase.table("thumbnail_prompts").update({
-                "generated_images": [generated_image_url],
+        await db_update("thumbnail_prompts", {"status": "fetching_youtube"}, job_id)
+        videos = await fetch_top_videos(state["title"])
+        await publish_job_update(job_id, "fetching_youtube")
+
+        print("calling")
+        await db_update("thumbnail_prompts", {
+            "youtube_examples": videos,
+            "status": "videos_fetched"
+        }, job_id)
+
+        return {"youtube_examples": videos, "status": "videos_fetched"}
+    except Exception as e:
+        await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        print(f"[Error] fetch_youtube_node: {e}")
+        return {"status": "failed"}
+
+
+@traceable(name="Generate OpenAI Node")
+async def generate_openai_node(state: ThumbnailState) -> dict:
+    job_id = state["job_id"]
+    prompt = state["refined_prompt"]
+    ref_images = state.get("reference_images", [])
+    await publish_job_update(job_id, "generating_openai")
+
+    image_base64 = await thumbnail_generation(prompt, ref_images, [])
+
+    signed_url, s3_key = upload_base64_to_s3(image_base64, job_id)
+
+    cache_key = await compute_cache_key(prompt, ref_images, "openai")
+    await redis_conn.setex(
+        f"img_cache:{cache_key}",
+        7*24*3600,
+        json.dumps({"s3_keys": [s3_key]})
+    )
+    await publish_job_update(job_id, "completed", [signed_url])
+
+    await db_update("thumbnail_prompts", {
+        "generated_images": [signed_url],
+        "status": "completed"
+    }, job_id)
+
+    return {"generated_images": [signed_url], "status": "completed"}
+
+
+
+@traceable(name="Generate Gemini Node")
+async def generate_gemini_node(state: ThumbnailState) -> dict:
+    job_id = state["job_id"]
+    prompt = state["refined_prompt"]
+    ref_images = state.get("reference_images", [])
+    youtube_examples = state.get("youtube_examples", [])
+
+    try:
+        cache_key = await compute_cache_key(prompt, ref_images, "gemini")
+        await publish_job_update(job_id, "generating_gemini")
+
+        cached = await redis_conn.get(f"img_cache:{cache_key}")
+        print(cached)
+        if cached:
+            print(f"[Cache Hit] Job {job_id} (Gemini)")
+            cached_data = json.loads(cached)
+            s3_keys = cached_data["s3_keys"]
+            presigned_urls = [
+                generate_presigned_url(key) for key in s3_keys
+            ]
+            await publish_job_update(job_id, "completed", image_urls)
+
+            await db_update("thumbnail_prompts", {
+                "generated_imag_gemini": presigned_urls,
                 "status": "completed"
-            }).eq("job_id", job_id).execute()
-        print(f"[Template Generation] Generated image for job {job_id}")
+            }, job_id)
+            return {"generated_imag_gemini": presigned_urls, "status": "completed"}
+
+        await db_update("thumbnail_prompts", {"status": "generating_gemini"}, job_id)
+
+        result = await thumbnail_generation_gemini(prompt, ref_images, youtube_examples, job_id)
+        image_urls = result["image_urls"]
+        await redis_conn.setex(
+            f"img_cache:{cache_key}",
+            7 * 24 * 3600,  
+            json.dumps({"s3_keys": image_urls})
+        )
+        await publish_job_update(job_id, "completed", image_urls)
+
+        await db_update("thumbnail_prompts", {
+            "generated_imag_gemini": image_urls,
+            "status": "completed"
+        }, job_id)
+        return {"generated_imag_gemini": image_urls, "status": "completed"}
 
     except Exception as e:
-        print(f"[Template Generation Error] Job {job_id} failed: {e}")
-        if job_id:
-            supabase.table("thumbnail_prompts").update({"status": "failed"}).eq("job_id", job_id).execute()
+        await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        print(f"[Gemini Node Error] Job {job_id} failed: {e}")
+        return {"status": "failed"}
 
+# ------------------------------
+# Build LangGraph
+# ------------------------------
+
+graph = StateGraph(state_schema=ThumbnailState)
+
+graph.add_node("refine_prompt", refine_prompt_node)
+graph.add_node("fetch_youtube", fetch_youtube_node)
+graph.add_node("generate_openai", generate_openai_node)
+graph.add_node("generate_gemini", generate_gemini_node)
+
+graph.add_edge("refine_prompt", "fetch_youtube")
+graph.add_edge("fetch_youtube", "generate_openai")
+graph.add_edge("fetch_youtube", "generate_gemini")
+graph.set_entry_point("refine_prompt")
+
+graph.compile()  
+
+# ------------------------------
+# Worker loop
+# ------------------------------
 
 async def worker_loop():
-
-    print("[Worker] Async worker started. Waiting for jobs...")
-
+    print("[Worker] Started. Waiting for jobs...")
     while True:
         job = await dequeue_job()
-        if job:
-            print(f"[Worker] Got job: {job}")
-            job_type = job.get("type")
-            try:
-                if job_type == "prompt_refinement":
-                    await process_refine_user_prompt(job)
-                elif job_type == "youtube_search":
-                    await process_youtube_search(job)
-                elif job_type == "upload_prompt":
-                    await process_upload_prompt(job)
-                elif job_type == "generate_openai_template":
-                    await process_generate_openai_template(job)  
-                elif job_type == "generate_gemini_template":
-                    await process_generate_gemini_template(job)      
-                else:
-                    print(f"[Worker] Unknown job type: {job_type}")
-            except Exception as e:
-                print(f"[Worker Error] Job {job.get('id')} failed: {e}")
-                if job.get("id"):
-                    supabase.table("thumbnail_prompts").update({"status": "failed"}).eq("job_id", job.get("id")).execute()
-        else:
+        if not job:
             await asyncio.sleep(1)
+            continue
+
+        job_id = job.get("id")
+        print(f"[Worker] Got job: {job_id}")
+
+        try:
+            record_res = await db_select("thumbnail_prompts", job_id)
+            if not record_res.data or len(record_res.data) == 0:
+                print(f"[Worker Error] No record found for job {job_id}")
+                continue
+
+            record = record_res.data[0]
+            state = {
+                "job_id": record["job_id"],
+                "user_query": record.get("user_query", ""),
+                "reference_images": record.get("reference_images", []),
+                "youtube_examples": record.get("youtube_examples", [])
+            }
+
+            state.update(await refine_prompt_node(state))
+
+            state.update(await fetch_youtube_node(state))
+
+            openai_result, gemini_result = await asyncio.gather(
+                generate_openai_node(state),
+                generate_gemini_node(state)
+            )
+
+            state["generated_images"] = (
+                openai_result.get("generated_images", []) +
+                gemini_result.get("generated_images", [])
+            )
+
+            await db_update("thumbnail_prompts", {
+                "generated_images": state["generated_images"],
+                "status": "completed"
+            }, job_id)
+
+        except Exception as e:
+            print(f"[Worker Error] Job {job_id} failed: {e}")
+            await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+
+
 
 if __name__ == "__main__":
     asyncio.run(worker_loop())

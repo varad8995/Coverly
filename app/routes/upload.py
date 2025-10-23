@@ -1,59 +1,84 @@
-from fastapi import APIRouter, Form, File, UploadFile
+from fastapi import APIRouter, Form, File, UploadFile, HTTPException, status
 from typing import List, Optional
-from dotenv import load_dotenv
 from ..services.queue import enqueue_job
+from ..db.s3_storage import upload_to_s3
 from ..db.supabase_client import supabase
-
-import os
+from ..models.upload_prompt import UploadPromptRequest
 import uuid
+import logging
+import asyncio
 
-load_dotenv()
-
+logger = logging.getLogger("coverly.api")
 router = APIRouter()
 
 
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-
-
-# TODO: Refactor this to handle authentication and validation
-@router.post("/upload-prompt")
+@router.post(
+    "/upload-prompt",
+    response_model=UploadPromptRequest,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload prompt and reference images",
+    description="Uploads reference images to S3, saves metadata to Supabase, and enqueues the thumbnail generation job."
+)
 async def upload_prompt_with_images(
-    user_query: str = Form(None),
+    user_query: Optional[str] = Form(None),
     reference_images: Optional[List[UploadFile]] = File(None),
 ):
-    """
-    Uploads images to private Supabase Storage, inserts job into table,
-    and enqueues for AI processing.
-    """
     job_id = str(uuid.uuid4())
+    image_urls: List[str] = []
 
-    # Upload images to private bucket
-    image_paths = []
+    try:
+        if reference_images:
+            upload_tasks = [
+                upload_to_s3(job_id, img.file, img.filename, img.content_type or "image/jpeg")
+                for img in reference_images
+            ]
+            results = await asyncio.gather(*upload_tasks, return_exceptions=True)
 
-    if reference_images:
-        for img in reference_images:
-            file_path = f"{job_id}/{img.filename}"
-            res = supabase.storage.from_(BUCKET_NAME).upload(file_path, img.file.read())
+            for i, res in enumerate(results):
+                if isinstance(res, Exception):
+                    logger.error(f"[Upload Error] {reference_images[i].filename}: {res}")
+                    continue
+                if res:
+                    image_urls.append(res)
 
-            signed = supabase.storage.from_(BUCKET_NAME).create_signed_url(file_path, 60*60*24*7)
-            signed_url = signed["signedURL"]
-            image_paths.append(signed_url)
+        if not user_query and not image_urls:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must provide either a text prompt or at least one reference image."
+            )
 
-    # Insert job into Supabase table 
-    data = {"job_id": job_id}
-    if user_query:
-        data["user_query"] = user_query
-    if image_paths:
-        data["reference_images"] = image_paths  
+        record = {
+            "job_id": job_id,
+            "user_query": user_query,
+            "reference_images": image_urls or [],
+            "status": "queued",
+        }
 
-    supabase.table("thumbnail_prompts").insert(data).execute()
+        response = supabase.table("thumbnail_prompts").insert(record).execute()
+        if not response.data:
+            logger.error(f"[Supabase Error] Failed to insert job {job_id}")
+            raise HTTPException(status_code=500, detail="Database insertion failed.")
 
-    job_data = {
-        "id": job_id,
-        "type": "upload_prompt",
-        "reference_images": image_paths,
-        "user_prompt": user_query
-    }
-    await enqueue_job(job_data)
+        job_data = {
+            "id": job_id,
+            "type": "upload_prompt",
+            "reference_images": image_urls,
+            "user_prompt": user_query,
+        }
 
-    return {"message": "Job enqueued", "job_id": job_id, "reference_images": image_paths, "user_prompt": user_query}
+        await enqueue_job(job_data)
+        logger.info(f"[Job Enqueued] {job_id}")
+
+        return UploadPromptRequest(
+            user_query=user_query,
+            reference_images=image_urls
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[Upload Prompt Error] Job {job_id} failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error while processing upload."
+        )

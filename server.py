@@ -1,5 +1,8 @@
-from fastapi import FastAPI
-from app.routes import generate_gemini_template, generate_openai_template, refine_use_query, upload , youtube_thumnail_retriever
+from fastapi import FastAPI, WebSocket
+from app.routes import upload
+import asyncio
+import json
+from redis.asyncio import Redis
 
 app = FastAPI(
     title="Coverly API",
@@ -11,9 +14,48 @@ app = FastAPI(
 def health_check():
     return {"status": "up and running 🚀"}
 
-
-app.include_router(refine_use_query.router, prefix="/api", tags=["User Query"])
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
-app.include_router(youtube_thumnail_retriever.router, prefix="/api", tags=["Youtube"])
-app.include_router(generate_openai_template.router, prefix="/api", tags=["Generate Template"])
-app.include_router(generate_gemini_template.router, prefix="/api", tags=["Generate Template"])
+
+# --------------------------
+# WebSocket for real-time updates
+# --------------------------
+CHANNEL = "thumbnail_updates"
+clients = set()
+redis_conn = Redis(host="valkey", port=6379, db=0, decode_responses=True)
+
+@app.websocket("/ws/thumbnail")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    clients.add(ws)
+    try:
+        while True:
+            await asyncio.sleep(1)  # keep connection alive
+    except:
+        pass
+    finally:
+        clients.remove(ws)
+
+# --------------------------
+# Redis subscriber to push updates
+# --------------------------
+async def redis_subscriber():
+    pubsub = redis_conn.pubsub()
+    await pubsub.subscribe(CHANNEL)
+
+    while True:
+        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1)
+        if message and "data" in message:
+            data = json.loads(message["data"])
+            disconnected = []
+            for ws in clients:
+                try:
+                    await ws.send_json(data)
+                except:
+                    disconnected.append(ws)
+            for ws in disconnected:
+                clients.remove(ws)
+        await asyncio.sleep(0.01)  # prevent busy loop
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(redis_subscriber())
