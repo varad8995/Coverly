@@ -3,6 +3,7 @@ import { createSlice } from "@reduxjs/toolkit";
 const initialState = {
     aspectRatio: "16:9",
     platform: "YouTube",
+    provider: "Both",
     prompt: "",
     isGenerating: false,
     hasGenerated: false,
@@ -18,6 +19,9 @@ const homeSlice = createSlice({
         },
         setPlatform: (state, action) => {
             state.platform = action.payload;
+        },
+        setProvider: (state, action) => {
+            state.provider = action.payload;
         },
         setPrompt: (state, action) => {
             state.prompt = action.payload;
@@ -41,6 +45,7 @@ const homeSlice = createSlice({
 export const {
     setAspectRatio,
     setPlatform,
+    setProvider,
     setPrompt,
     toggleDarkMode,
     startGenerating,

@@ -1,14 +1,15 @@
 import React from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setAspectRatio, setPlatform, setPrompt, startGenerating, finishGenerating } from "../../redux/homeSlice";
+import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating } from "../../redux/homeSlice";
 import { Upload, Sparkles, RefreshCw } from "lucide-react";
 
 export default function DesignSettings() {
   const dispatch = useDispatch();
-  const { aspectRatio, platform, prompt, isGenerating, isDarkMode } = useSelector((state) => state.home);
+  const { aspectRatio, platform, provider, prompt, isGenerating, isDarkMode } = useSelector((state) => state.home);
 
   const aspectRatios = ["16:9", "9:16", "1:1", "4:5"];
   const platforms = ["YouTube", "Instagram", "Blog", "Podcast", "Twitter"];
+  const providers = ["OpenAI", "Gemini", "Both"];
 
   const inputBg = isDarkMode ? "bg-black border-neutral-900 text-white" : "bg-white border-purple-200 text-gray-900";
   const textPrimary = isDarkMode ? "text-white" : "text-gray-900";
@@ -62,6 +63,34 @@ export default function DesignSettings() {
               {plat}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Provider */}
+      <div className="mb-6">
+        <label className={`block text-sm font-medium ${textSecondary} mb-3`}>AI Provider</label>
+        <div className="grid grid-cols-3 gap-3">
+          {providers.map((prov) => (
+            <button
+              key={prov}
+              onClick={() => dispatch(setProvider(prov))}
+              className={`py-3 px-4 rounded-xl font-medium ${
+                provider === prov ? "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white" : `${inputBg} border hover:border-purple-400`
+              } transition-all duration-300`}
+            >
+              {prov}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Image Upload */}
+      <div className="mb-6">
+        <label className={`block text-sm font-medium ${textSecondary} mb-3`}>Background Image (Optional)</label>
+        <div className={`${inputBg} border-2 border-dashed rounded-xl p-8 text-center hover:border-purple-400 transition-all duration-300 cursor-pointer group`}>
+          <Upload className={`w-8 h-8 mx-auto mb-3 ${textSecondary} group-hover:text-purple-500 transition-colors`} />
+          <p className={`text-sm ${textSecondary} mb-1`}>Drop your image here or click to browse</p>
+          <p className={`text-xs ${textSecondary} opacity-60`}>PNG, JPG up to 10MB</p>
         </div>
       </div>
 
