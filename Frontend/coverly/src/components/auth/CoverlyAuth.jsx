@@ -1,13 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sparkles, Mail, Lock, User, Eye, EyeOff, ArrowRight } from "lucide-react";
-import ModeToggle from "../utilities/ModeToggle";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import "../../styles/coverlyAuth.css";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../../api/supabaseClient.js";
+import { setLoading, setUser, clearUser, setError } from "../../redux/authSlice.js";
 
 export default function CoverlyAuth() {
-  const { isDarkMode } = useSelector((state) => state.home);
-  let navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { isDarkMode } = useSelector((state) => ({
+    isDarkMode: state.home.isDarkMode,
+  }));
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -15,6 +18,7 @@ export default function CoverlyAuth() {
     email: "",
     password: "",
   });
+  let navigate = useNavigate();
 
   const bgClass = isDarkMode ? "bg-black" : "bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50";
   const cardBg = isDarkMode ? "bg-neutral-950 backdrop-blur-xl border-neutral-900" : "bg-white/80 backdrop-blur-xl border-purple-200/50";
@@ -22,9 +26,52 @@ export default function CoverlyAuth() {
   const textSecondary = isDarkMode ? "text-neutral-500" : "text-gray-600";
   const inputBg = isDarkMode ? "bg-black border-neutral-900 text-white" : "bg-white border-purple-200 text-gray-900";
 
+  useEffect(() => {
+    const getSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        dispatch(setUser({ user: session.user, session }));
+        navigate("/home");
+      }
+    };
+
+    getSession();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        dispatch(setUser({ user: session.user, session }));
+        navigate("/home");
+      } else {
+        dispatch(clearUser());
+      }
+    });
+
+    return () => subscription.subscription.unsubscribe();
+  }, [dispatch, navigate]);
+
+  const handleGoogleLogin = async () => {
+    dispatch(setLoading(true));
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+
+    if (error) {
+      dispatch(setError(error.message));
+      console.error("Login error:", error.message);
+    }
+
+    dispatch(setLoading(false));
+  };
+
   const handleSubmit = () => {
     console.log("Form submitted:", formData);
-    navigate("/home");
+    // navigate("/home");
   };
 
   return (
@@ -36,11 +83,6 @@ export default function CoverlyAuth() {
           className={`absolute bottom-20 right-10 w-96 h-96 ${isDarkMode ? "bg-pink-900/10" : "bg-pink-300/20"} rounded-full blur-3xl animate-float`}
           style={{ animationDelay: "2s" }}
         ></div>
-      </div>
-
-      {/* Mode Toggle */}
-      <div className="absolute top-8 right-8 flex items-center gap-3 z-20 animate-fadeIn">
-        <ModeToggle />
       </div>
 
       {/* Auth Card */}
@@ -157,11 +199,12 @@ export default function CoverlyAuth() {
 
         {/* Social Login */}
         <div
-          className="grid grid-cols-2 gap-4 mb-8 animate-fadeIn"
+          className="grid grid-cols-1 gap-4 mb-8 animate-fadeIn"
           style={{ animationDelay: "0.4s" }}
         >
           <button
             className={`${inputBg} border py-3 rounded-xl font-medium hover:border-purple-400 transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95`}
+            onClick={handleGoogleLogin}
           >
             <svg
               className="w-5 h-5"
@@ -186,28 +229,8 @@ export default function CoverlyAuth() {
             </svg>
             Google
           </button>
-          <button
-            className={`${inputBg} border py-3 rounded-xl font-medium hover:border-purple-400 transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95`}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-github-icon lucide-github"
-            >
-              <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-              <path d="M9 18c-4.51 2-5-2-7-2" />
-            </svg>
-            GitHub
-          </button>
         </div>
 
-        {/* Toggle Auth Mode */}
         <div
           className={`text-center ${textSecondary} animate-fadeIn`}
           style={{ animationDelay: "0.5s" }}

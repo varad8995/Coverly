@@ -12,11 +12,13 @@ function App() {
         />
         <Route
           path="/home"
-          element={<Home />}
+          element={
+            // <ProtectedRoute user={null}>
+            <Home />
+            // </ProtectedRoute>
+          }
         />
       </Routes>
-      {/* <Home /> */}
-      {/* <CoverlyAuth /> */}
     </>
   );
 }
