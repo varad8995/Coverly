@@ -241,7 +241,6 @@ graph.compile()
 # ------------------------------
 # Worker loop
 # ------------------------------
-
 async def worker_loop():
     print("[Worker] Started. Waiting for jobs...")
     while True:
@@ -251,7 +250,12 @@ async def worker_loop():
             continue
 
         job_id = job.get("id")
-        print(f"[Worker] Got job: {job_id}")
+        user_id = job.get("user_id") 
+        if not user_id:
+            print(f"[Worker Error] Job {job_id} has no user_id")
+            continue
+
+        print(f"[Worker] Got job: {job_id} for user {user_id}")
 
         try:
             record_res = await db_select("thumbnail_prompts", job_id)
@@ -260,8 +264,15 @@ async def worker_loop():
                 continue
 
             record = record_res.data[0]
+
+            # Ensure job belongs to the same user
+            if record.get("user_id") != user_id:
+                print(f"[Worker Error] User mismatch for job {job_id}")
+                continue
+
             state = {
                 "job_id": record["job_id"],
+                "user_id": user_id,  
                 "user_query": record.get("user_query", ""),
                 "reference_images": record.get("reference_images", []),
                 "youtube_examples": record.get("youtube_examples", []),
@@ -292,6 +303,7 @@ async def worker_loop():
         except Exception as e:
             print(f"[Worker Error] Job {job_id} failed: {e}")
             await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+
 
 
 
