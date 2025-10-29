@@ -3,7 +3,11 @@ from app.routes import upload
 import asyncio
 import json
 from redis.asyncio import Redis
+import os
 
+# --------------------------
+# FastAPI Setup
+# --------------------------
 app = FastAPI(
     title="Coverly API",
     description="Backend API for generating AI thumbnails with YouTube reference search.",
@@ -17,13 +21,20 @@ def health_check():
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
 
 # --------------------------
-# Redis + WebSocket Setup
+# Redis (Upstash) Setup
 # --------------------------
-CHANNEL = "thumbnail_updates"
-redis_conn = Redis(host="valkey", port=6379, db=0, decode_responses=True)
+REDIS_URL = os.getenv(
+    "REDIS_URL",
+)
 
+redis_conn = Redis.from_url(REDIS_URL, decode_responses=True)
+
+# Each job_id has a set of connected WebSocket clients
 clients_by_job: dict[str, set[WebSocket]] = {}
 
+# --------------------------
+# WebSocket Endpoint
+# --------------------------
 @app.websocket("/ws/thumbnail/{job_id}")
 async def websocket_endpoint(ws: WebSocket, job_id: str):
     """Each WebSocket listens for updates for a specific job_id."""
@@ -39,17 +50,16 @@ async def websocket_endpoint(ws: WebSocket, job_id: str):
     except WebSocketDisconnect:
         pass
     finally:
-        # Cleanup on disconnect
         clients_by_job[job_id].remove(ws)
         if not clients_by_job[job_id]:
             del clients_by_job[job_id]
 
 # --------------------------
-# Redis subscriber to push updates
+# Redis Subscriber
 # --------------------------
 async def redis_subscriber():
     pubsub = redis_conn.pubsub()
-    await pubsub.subscribe(CHANNEL)
+    await pubsub.subscribe("thumbnail_updates")
 
     while True:
         message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1)
@@ -58,9 +68,8 @@ async def redis_subscriber():
                 data = json.loads(message["data"])
                 job_id = data.get("job_id")
                 if not job_id:
-                    continue  # ignore messages without job_id
+                    continue  # ignore invalid messages
 
-                # Send updates only to clients tracking this job_id
                 if job_id in clients_by_job:
                     disconnected = []
                     for ws in clients_by_job[job_id]:
@@ -68,13 +77,14 @@ async def redis_subscriber():
                             await ws.send_json(data)
                         except Exception:
                             disconnected.append(ws)
+
                     for ws in disconnected:
                         clients_by_job[job_id].remove(ws)
-                    # clean up empty sets
                     if not clients_by_job[job_id]:
                         del clients_by_job[job_id]
             except json.JSONDecodeError:
                 pass
+
         await asyncio.sleep(0.01)  # prevent busy loop
 
 @app.on_event("startup")
