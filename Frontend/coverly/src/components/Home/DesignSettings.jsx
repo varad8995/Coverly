@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating } from "../../redux/homeSlice";
-import { Upload, Sparkles, RefreshCw } from "lucide-react";
+import { Upload, Sparkles, RefreshCw, X } from "lucide-react";
 
 export default function DesignSettings() {
   const dispatch = useDispatch();
@@ -16,11 +16,36 @@ export default function DesignSettings() {
   const textSecondary = isDarkMode ? "text-neutral-500" : "text-gray-600";
   const cardBg = isDarkMode ? "bg-neutral-950 backdrop-blur-xl border-neutral-900" : "bg-white/80 backdrop-blur-xl border-purple-200/50";
 
+  const fileInputRef = useRef(null);
+  const [preview, setPreview] = useState(null);
+  const [fileName, setFileName] = useState("");
+
   const handleGenerate = () => {
     dispatch(startGenerating());
     setTimeout(() => {
       dispatch(finishGenerating());
     }, 3000);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPreview(reader.result);
+      reader.readAsDataURL(file);
+      setFileName(file.fileName);
+    } else {
+      alert("Please select a valid image file (PNG, JPG, JPEG)");
+    }
+  };
+
+  const removeImage = () => {
+    setPreview(null);
+    setFileName("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -87,11 +112,44 @@ export default function DesignSettings() {
       {/* Image Upload */}
       <div className="mb-6">
         <label className={`block text-sm font-medium ${textSecondary} mb-3`}>Background Image (Optional)</label>
-        <div className={`${inputBg} border-2 border-dashed rounded-xl p-8 text-center hover:border-purple-400 transition-all duration-300 cursor-pointer group`}>
-          <Upload className={`w-8 h-8 mx-auto mb-3 ${textSecondary} group-hover:text-purple-500 transition-colors`} />
-          <p className={`text-sm ${textSecondary} mb-1`}>Drop your image here or click to browse</p>
-          <p className={`text-xs ${textSecondary} opacity-60`}>PNG, JPG up to 10MB</p>
+        <div
+          className="border-2 border-dashed rounded-xl p-8 text-center hover:border-purple-400 transition-all duration-300 cursor-pointer group"
+          onClick={() => fileInputRef.current.click()}
+        >
+          {preview ? (
+            <div className="relative inline-block w-full">
+              <img
+                src={preview}
+                alt="Preview"
+                className="w-full h-48 object-cover rounded-xl border"
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeImage();
+                }}
+                className="absolute top-2 right-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full p-1"
+              >
+                <X size={18} />
+              </button>
+              <p className="text-sm mt-2 text-gray-600">{fileName}</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="w-8 h-8 mx-auto mb-3 text-gray-400 group-hover:text-purple-500 transition-colors" />
+              <p className="text-sm text-gray-500 mb-1">Click to upload your image</p>
+              <p className="text-xs text-gray-400 opacity-60">PNG, JPG up to 10MB</p>
+            </>
+          )}
         </div>
+
+        <input
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
 
       {/* Prompt */}
