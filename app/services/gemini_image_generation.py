@@ -47,7 +47,7 @@ def pil_to_inline_data(image: Image.Image, mime_type="image/jpeg"):
     }
 
 async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls: list, youtube_image_urls: list,job_id: str,aspect_ratio=str,platform=str):
-    prompt_text = build_thumbnail_system_prompt_gemini(aspect_ratio,platform)
+    prompt_text = build_thumbnail_system_prompt_gemini(refined_prompt,aspect_ratio,platform)
 
     
     if not isinstance(youtube_image_urls, list):
@@ -103,7 +103,6 @@ async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls:
                 ]
             )
 
-
     output_urls = []
     count = 1
     for part in response.candidates[0].content.parts:
@@ -112,5 +111,4 @@ async def thumbnail_generation_gemini(refined_prompt: str, reference_image_urls:
             url = await upload_to_s3_bytes(img_bytes, job_id, count)
             output_urls.append(url)
             count += 1
-
     return {"image_urls": output_urls}

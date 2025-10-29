@@ -36,7 +36,7 @@ async def refine_prompt(user_prompt: str,aspect_ratio=str,platform=str) -> str:
     Refine the original prompt following these guidelines.
     """
     response = client.chat.completions.create(
-        model="gpt-4.1-mini",  # upgraded model
+        model="gpt-4.1-mini",  
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
@@ -63,7 +63,7 @@ async def extract_title(video_context: str,platform=str) -> str:
     Should be short and engaging.
     """
     response = client.chat.completions.create(
-        model="gpt-4.1-mini",  # upgraded model
+        model="gpt-4.1-mini",  
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
