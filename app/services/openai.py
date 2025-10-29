@@ -9,9 +9,9 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-async def thumbnail_generation(refined_prompt: str, reference_images, youtube_reference_images):
+async def thumbnail_generation(refined_prompt: str, reference_images, youtube_reference_images,aspect_ratio,platform):
 
-    system_prompt = build_thumbnail_system_prompt_openai(refined_prompt)
+    system_prompt = build_thumbnail_system_prompt_openai(refined_prompt,aspect_ratio,platform)
     response = client.responses.create(
         model="gpt-4.1",
         input=[

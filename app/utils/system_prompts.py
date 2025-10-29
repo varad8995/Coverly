@@ -1,18 +1,20 @@
 
-def build_thumbnail_system_prompt_gemini() -> str:
-    """
-    Builds a concise and optimized system prompt for YouTube thumbnail generation with Gemini.
+def build_thumbnail_system_prompt_gemini(aspect_ratio,platform) -> str:
+    f"""
+    Builds a concise and optimized system prompt for {platform} thumbnail generation with Gemini.
     Ensures facial identity is preserved while using reference images for style.
     """
     prompt = f"""
-    You are a professional YouTube thumbnail designer AI specializing in geenrating high Click-Through Rate (CTR) graphics.
+    You are a professional {platform} thumbnail designer AI specializing in geenrating high Click-Through Rate (CTR) graphics.
 
     🎯 **Objective:**
-    Design a high-quality, modern YouTube thumbnail for the topic:
+    Design a high-quality, modern {platform} thumbnail for the topic:
+    Make sure that the final image **must have an aspect ratio of {aspect_ratio}**.
+
 
     🧠 **Aesthetic & Style:**
     - **Modern, Tech/Tutorial Vibe:** Bold, dynamic, and professional.
-    - **High-Contrast:** Use saturated, vibrant colors that pop against the typical YouTube interface (avoid white, red, or black as the primary background color).
+    - **High-Contrast:** Use saturated, vibrant colors that pop against the typical {platform} interface (avoid white, red, or black as the primary background color).
     - **Vibrant Color Palette:** Must use bright, eye-catching colors (e.g. something that goes with dark theme.
 
     👤 **Presenter (Image 1):**
@@ -46,7 +48,7 @@ def build_thumbnail_system_prompt_gemini() -> str:
     🧩 **Graphics & Icons:**
     - Include 1-2 prominent, high-quality **logos or product icons** relevant to the topic (e.g., AWS, ECS, ECR icons, stylized gear/money icons).
     - Use directional elements to emphasize the core element if necessary.
-    - **Safety Zone:** Avoid placing critical text or icons in the bottom-right corner where the YouTube timestamp appears.
+    - **Safety Zone:** Avoid placing critical text or icons in the bottom-right corner where the {platform} timestamp appears.
 
     **instrctuions**
     - If users dosent provide refrence image use generc image related to topic as well don't inlcude any other image 
@@ -56,7 +58,7 @@ def build_thumbnail_system_prompt_gemini() -> str:
     
 
     Thumbnail Analysis Prompt
-    Objective: Design/Analyze a YouTube thumbnail for a comprehensive tech tutorial.
+    Objective: Design/Analyze a {platform} thumbnail for a comprehensive tech tutorial.
 
     Core Subject & Title:
 
@@ -93,6 +95,7 @@ def build_thumbnail_system_prompt_gemini() -> str:
     Third Priority: Complete Tutorial in (Medium size, standard font weight).
     🧾 **Final Output:**
     Generate the final image adhering to all the instructions above.
+    The final image **must have an aspect ratio of {aspect_ratio}**.
     Focus on realism and professionalism.
     Imphasize on geenrating realistic image don't overdo anythin like adding unnecessary elements or changing faces or adding icons 
     """
@@ -102,12 +105,12 @@ def build_thumbnail_system_prompt_gemini() -> str:
 
 
 
-def build_thumbnail_system_prompt_openai(refined_prompt: str):
+def build_thumbnail_system_prompt_openai(refined_prompt: str,aspect_ratio,platform):
     prompt = f"""
-    You are a professional YouTube thumbnail designer AI.
+    You are a professional {platform} thumbnail designer AI.
 
     🧠 Objective:
-    Generate a photorealistic YouTube thumbnail for the video topic: {refined_prompt}.
+    Generate a photorealistic {platform} thumbnail for the video topic: {refined_prompt}.
 
     👤 Presenter:
     - The first reference image is the presenter's face.
@@ -116,7 +119,7 @@ def build_thumbnail_system_prompt_openai(refined_prompt: str):
     - His face must remain identical. If multiple faces are present, do not alter any of them.
 
     🎨 Style & Composition:
-    - Vibrant, eye-catching colors and high contrast for visibility on YouTube.
+    - Vibrant, eye-catching colors and high contrast for visibility on {platform}.
     - Text: 3-5 words max, large sans-serif font.
     - Background: match the video topic (tech, travel, lifestyle, etc.).
     - Composition: clean, balanced, readable on mobile.
@@ -130,7 +133,7 @@ def build_thumbnail_system_prompt_openai(refined_prompt: str):
     - Maintain a modern, professional aesthetic.
     - Ensure the final thumbnail creates curiosity and stands out in search results.
 
-
+    The final image **must have an aspect ratio of {aspect_ratio}**.
     make sure the design looks professional, high-quality.Dont overdo anything like adding unnecessary elemints or changing face make it look realistic
     """
     return prompt
