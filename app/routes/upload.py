@@ -115,7 +115,7 @@ async def upload_prompt_with_images(
             raise HTTPException(status_code=500, detail="Database insertion failed.")
 
         job_data = {
-            "id": job_id,
+            "job_id": job_id,
             "type": "upload_prompt",
             "reference_images": image_urls,
             "user_prompt": user_query,
