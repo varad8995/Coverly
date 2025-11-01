@@ -1,8 +1,8 @@
 import api from "../interceptor/interceptor"
 
-const generateThumbail = async (data) => {
+const generateThumbnail = async (data) => {
     try {
-        var response = await api.post("", data);
+        var response = await api.post("upload-prompt", data);
         return response.data;
     }
     catch (error) {
@@ -11,4 +11,4 @@ const generateThumbail = async (data) => {
     }
 }
 
-export { generateThumbail };
+export { generateThumbnail };
