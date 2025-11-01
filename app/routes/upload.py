@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, status, Depends
 from typing import List, Optional
-from ..services.queue import enqueue_job
+from ..db.queue_connection import enqueue_job
 from ..db.s3_storage import upload_to_s3
 from ..db.supabase_client import supabase
 from ..models.upload_prompt import UploadPromptRequest
