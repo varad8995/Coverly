@@ -52,8 +52,10 @@ async def upload_prompt_with_images(
     user_query: Optional[str] = Form(None),
     aspect_ratio: Optional[str] = Form("16:9"),
     platform: Optional[str] = Form("YouTube"),
+    generator_provider: Optional[str] = Form("openai"),
     reference_images: Optional[List[UploadFile]] = File(None),
-    user=Depends(verify_supabase_token)  # JWT verified user
+
+    user=Depends(verify_supabase_token)  
 ):
     user_id = user['sub']
     provider = user.get("app_metadata", {}).get("provider", "unknown")
@@ -94,7 +96,6 @@ async def upload_prompt_with_images(
                 detail="You must provide either a text prompt or at least one reference image."
             )
 
-        # Insert job into Supabase with user_id and provider
         record = {
             "job_id": job_id,
             "user_id": user_id,           
@@ -103,6 +104,7 @@ async def upload_prompt_with_images(
             "reference_images": image_urls or [],
             "aspect_ratio": aspect_ratio,    
             "platform": platform,   
+            "generator_provider": generator_provider,
             "status": "queued",
             "credits_consumed": 1
         }

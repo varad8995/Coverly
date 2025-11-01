@@ -66,6 +66,7 @@ class ThumbnailState(TypedDict, total=False):
     aspect_ratio: str   
     platform: str  
     status: str
+    generator_provider: str
 
 
 # ------------------------------
@@ -250,7 +251,7 @@ async def worker_loop():
             continue
 
         job_id = job.get("id")
-        user_id = job.get("user_id") 
+        user_id = job.get("user_id")
         if not user_id:
             print(f"[Worker Error] Job {job_id} has no user_id")
             continue
@@ -265,44 +266,64 @@ async def worker_loop():
 
             record = record_res.data[0]
 
-            # Ensure job belongs to the same user
             if record.get("user_id") != user_id:
                 print(f"[Worker Error] User mismatch for job {job_id}")
                 continue
 
             state = {
                 "job_id": record["job_id"],
-                "user_id": user_id,  
+                "user_id": user_id,
                 "user_query": record.get("user_query", ""),
                 "reference_images": record.get("reference_images", []),
                 "youtube_examples": record.get("youtube_examples", []),
                 "platform": record.get("platform", "YouTube"),
                 "aspect_ratio": record.get("aspect_ratio", "16:9"),
+                "generator_provider": record.get("generator_provider", "gemini"),
             }
 
+            # --- Refine prompt + title ---
             state.update(await refine_prompt_node(state))
 
+            # --- Fetch YouTube examples if needed ---
             if state.get("platform") == "YouTube":
                 state.update(await fetch_youtube_node(state))
 
-            openai_result, gemini_result = await asyncio.gather(
-                generate_openai_node(state),
-                generate_gemini_node(state)
-            )
+            provider_choice = record.get("generator_provider", "gemini").lower()
+            print(provider_choice)
+            generated_images = []
 
-            state["generated_images"] = (
-                openai_result.get("generated_images", []) +
-                gemini_result.get("generated_images", [])
-            )
+            # --- OpenAI ---
+            if provider_choice == "openai":
+                openai_result = await generate_openai_node(state)
+                generated_images.extend(openai_result.get("generated_images", []))
 
-            await db_update("thumbnail_prompts", {
-                "generated_images": state["generated_images"],
-                "status": "completed"
-            }, job_id)
+            # --- Gemini ---
+            elif provider_choice == "gemini":
+                gemini_result = await generate_gemini_node(state)
+                generated_images.extend(gemini_result.get("generated_imag_gemini", []))
+
+            # --- Both ---
+            elif provider_choice == "both":
+                openai_result, gemini_result = await asyncio.gather(
+                    generate_openai_node(state),
+                    generate_gemini_node(state),
+                )
+                generated_images.extend(openai_result.get("generated_images", []))
+                generated_images.extend(gemini_result.get("generated_imag_gemini", []))
+
+            # --- Save final state ---
+            state["generated_images"] = generated_images
+
+            await db_update(
+                "thumbnail_prompts",
+                {"generated_images": generated_images, "status": "completed"},
+                job_id,
+            )
 
         except Exception as e:
             print(f"[Worker Error] Job {job_id} failed: {e}")
             await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+
 
 
 

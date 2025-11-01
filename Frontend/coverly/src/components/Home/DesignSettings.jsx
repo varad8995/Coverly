@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating } from "../../redux/homeSlice";
 import { Upload, Sparkles, RefreshCw, X } from "lucide-react";
+import { generateThumbnail } from "../../api/apiService";
 
 export default function DesignSettings() {
   const dispatch = useDispatch();
@@ -17,34 +18,57 @@ export default function DesignSettings() {
   const cardBg = isDarkMode ? "bg-neutral-950 backdrop-blur-xl border-neutral-900" : "bg-white/80 backdrop-blur-xl border-purple-200/50";
 
   const fileInputRef = useRef(null);
-  const [preview, setPreview] = useState(null);
-  const [fileName, setFileName] = useState("");
+  // const [preview, setPreview] = useState(null);
+  const [fileName, setFileName] = useState([]);
+  const [images, setImages] = useState([]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     dispatch(startGenerating());
     setTimeout(() => {
       dispatch(finishGenerating());
     }, 3000);
+
+    const formData = new FormData();
+    formData.append("aspect_ratio", aspectRatio);
+    formData.append("platform", platform);
+    formData.append("generator_provider", provider);
+    formData.append("user_query", prompt);
+    images.forEach((file) => {
+      formData.append("reference_images", file);
+    });
+    console.log("FormData entries:");
+    for (const [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
+
+    try {
+      const data = await generateThumbnail(formData);
+      console.log("Generated Thumbnail Data:", data);
+    } catch (err) {
+      console.error("Error preparing form data:", err);
+    }
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
+    const files = Array.from(e.target.files);
+    setImages(files);
 
-    if (!file) return;
-
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result);
-      reader.readAsDataURL(file);
-      setFileName(file.fileName);
-    } else {
-      alert("Please select a valid image file (PNG, JPG, JPEG)");
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        // reader.onloadend = () => setPreview(reader.result);
+        reader.readAsDataURL(file);
+        setFileName((prev) => [...prev, file.name]);
+      } else {
+        alert("Please select a valid image file (PNG, JPG, JPEG)");
+      }
     }
   };
 
   const removeImage = () => {
-    setPreview(null);
-    setFileName("");
+    // setPreview(null);
+    setFileName([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -116,7 +140,7 @@ export default function DesignSettings() {
           className="border-2 border-dashed rounded-xl p-8 text-center hover:border-purple-400 transition-all duration-300 cursor-pointer group"
           onClick={() => fileInputRef.current.click()}
         >
-          {preview ? (
+          {/* {preview ? (
             <div className="relative inline-block w-full">
               <img
                 src={preview}
@@ -134,18 +158,19 @@ export default function DesignSettings() {
               </button>
               <p className="text-sm mt-2 text-gray-600">{fileName}</p>
             </div>
-          ) : (
-            <>
-              <Upload className="w-8 h-8 mx-auto mb-3 text-gray-400 group-hover:text-purple-500 transition-colors" />
-              <p className="text-sm text-gray-500 mb-1">Click to upload your image</p>
-              <p className="text-xs text-gray-400 opacity-60">PNG, JPG up to 10MB</p>
-            </>
-          )}
+          ) : ( */}
+          <>
+            <Upload className="w-8 h-8 mx-auto mb-3 text-gray-400 group-hover:text-purple-500 transition-colors" />
+            <p className="text-sm text-gray-500 mb-1">Click to upload your image</p>
+            <p className="text-xs text-gray-400 opacity-60">PNG, JPG up to 10MB</p>
+          </>
+          {/* )} */}
         </div>
 
         <input
           type="file"
           accept="image/*"
+          multiple
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
