@@ -250,7 +250,7 @@ async def worker_loop():
             await asyncio.sleep(1)
             continue
 
-        job_id = job.get("id")
+        job_id = job.get("job_id")
         user_id = job.get("user_id")
         if not user_id:
             print(f"[Worker Error] Job {job_id} has no user_id")
