@@ -57,7 +57,7 @@ async def upload_prompt_with_images(
 
     user=Depends(verify_supabase_token)  
 ):
-    user_id = user['sub']
+    user_id = user['id']
     provider = user.get("app_metadata", {}).get("provider", "unknown")
 
     initialize_user_credits(user_id)

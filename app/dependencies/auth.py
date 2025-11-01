@@ -9,7 +9,7 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # add this in your .env
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 security = HTTPBearer()
@@ -20,7 +20,6 @@ async def verify_supabase_token(
 ):
     token = credentials.credentials
     try:
-        # 1️⃣ Verify and decode the JWT locally (faster + no API call)
         decoded = jwt.decode(
             token,
             SUPABASE_JWT_SECRET,
@@ -28,8 +27,7 @@ async def verify_supabase_token(
             options={"verify_aud": False},  # optional
         )
 
-        # 2️⃣ Optionally confirm user still exists in Supabase
-        # (This step uses the Supabase service key)
+
         user_resp = supabase.auth.admin.get_user_by_id(decoded["sub"])
         user = user_resp.user
 
@@ -39,7 +37,6 @@ async def verify_supabase_token(
                 detail="User not found in Supabase",
             )
 
-        # 3️⃣ Return verified user info
         return {
             "id": user.id,
             "email": user.email,
