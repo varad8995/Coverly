@@ -127,7 +127,8 @@ async def upload_prompt_with_images(
         return UploadPromptRequest(
             user_query=user_query,
             reference_images=image_urls,
-            remaining_credits=remaining_credits
+            remaining_credits=remaining_credits,
+            job_id=job_id
         )
 
     except HTTPException:
