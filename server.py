@@ -1,5 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from app.routes import upload
+from app.routes import upload,download
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import json
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
+app.include_router(download.router, prefix="/api", tags=["Download"])
 
 # --------------------------
 # Redis (Upstash) Setup
