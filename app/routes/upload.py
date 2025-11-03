@@ -53,7 +53,7 @@ async def upload_prompt_with_images(
     aspect_ratio: Optional[str] = Form("16:9"),
     platform: Optional[str] = Form("YouTube"),
     generator_provider: Optional[str] = Form("openai"),
-    reference_images: Optional[List[UploadFile]] = File(None),
+    reference_images: Optional[UploadFile] = File(None),
 
     user=Depends(verify_supabase_token)  
 ):
