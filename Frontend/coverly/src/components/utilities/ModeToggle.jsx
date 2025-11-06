@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Moon, Sun } from "lucide-react";
 import { toggleDarkMode } from "../../redux/homeSlice";
@@ -23,10 +23,6 @@ export default function ModeToggle() {
   const open = Boolean(anchorEl);
   const menuBg = isDarkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-gray-200";
   const iconColor = isDarkMode ? "#e5e5e5" : "#333333";
-
-  useEffect(() => {
-    console.log(user);
-  }, []);
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
@@ -63,9 +59,13 @@ export default function ModeToggle() {
             aria-expanded={open ? "true" : undefined}
           >
             <img
-              src={user.user_metadata.avatar_url}
+              src={user?.user_metadata?.avatar_url || "/userDark.png"}
               alt="Profile"
               className="w-12 h-12 rounded-full border border-gray-300 dark:border-zinc-700 shadow-sm object-cover ml-auto"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "/userDark.png";
+              }}
             />
           </IconButton>
         </Tooltip>
@@ -119,14 +119,9 @@ export default function ModeToggle() {
           className="flex items-center justify-between gap-4 px-4 py-3 border-b border-gray-200 dark:border-zinc-700"
         >
           <div className="flex flex-col text-left">
-            <span className={`text-md font-semibold text-gray-900`}>{user.user_metadata.full_name}</span>
-            <span className={`text-xs font-medium text-gray-900 truncate`}>{user.user_metadata.email}</span>
+            <span className={`text-md font-semibold text-gray-900`}>{user?.user_metadata?.full_name || ""}</span>
+            <span className={`text-xs font-medium text-gray-900 truncate`}>{user?.user_metadata?.email || ""}</span>
           </div>
-          {/* <img
-            src={user.user_metadata.avatar_url}
-            alt="Profile"
-            className="w-12 h-12 rounded-full border border-gray-300 dark:border-zinc-700 shadow-sm object-cover ml-auto"
-          /> */}
         </MenuItem>
 
         {/* THEME TOGGLE */}

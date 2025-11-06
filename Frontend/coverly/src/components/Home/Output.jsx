@@ -2,11 +2,14 @@ import React from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Sparkles, Download, RefreshCw, Image } from "lucide-react";
 import { resetGeneration } from "../../redux/homeSlice";
+import { resetImageUrl } from "../../redux/imagesUrlSlice";
 import "../../styles/animations.css";
 
 export default function Output() {
   const dispatch = useDispatch();
   const { isGenerating, hasGenerated, isDarkMode } = useSelector((state) => state.home);
+  const imageUrl = useSelector((state) => state.imagesurl.newImage);
+  const recentImages = useSelector((state) => state.imagesurl.recentImages);
 
   const cardBg = isDarkMode ? "bg-neutral-950 backdrop-blur-xl border-neutral-900" : "bg-white/80 backdrop-blur-xl border-purple-200/50";
   const textPrimary = isDarkMode ? "text-white" : "text-gray-900";
@@ -15,6 +18,33 @@ export default function Output() {
 
   const handleRegenerate = () => {
     dispatch(resetGeneration());
+    dispatch(resetImageUrl());
+  };
+
+  const handleDownload = (url) => {
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `thumbnail_${Date.now()}.png`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Error downloading image:", error);
+    }
+  };
+
+  const handleGeneratedImageDownload = () => {
+    try {
+      if (!imageUrl) {
+        alert("No image available to download!");
+        return;
+      }
+
+      handleDownload(imageUrl);
+    } catch (err) {
+      console.error("Error downloading the image:", err);
+    }
   };
 
   return (
@@ -48,30 +78,27 @@ export default function Output() {
         {hasGenerated && !isGenerating && (
           <div className="space-y-4 animate-fadeIn">
             <div className="aspect-video rounded-2xl bg-gradient-to-br from-purple-600 via-pink-600 to-orange-600 flex items-center justify-center relative overflow-hidden shadow-2xl animate-scaleIn">
-              <div className="text-center text-white z-10">
-                <h3 className="text-4xl font-bold mb-2 animate-slideUp">AI Thumbnail</h3>
-                <p
-                  className="text-lg opacity-90 animate-slideUp"
-                  style={{ animationDelay: "0.1s" }}
-                >
-                  Your Creative Vision
-                </p>
-              </div>
+              <img
+                src={imageUrl}
+                alt="Generated Thumbnail"
+                className="w-full h-full object-cover rounded-2xl relative z-10"
+              />
+
               <div className="absolute inset-0 bg-black/10"></div>
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shine"></div>
             </div>
 
             <div className="flex gap-3">
               <button
-                className="flex-1 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95"
-                onClick={() => alert("Downloading...")}
+                className="flex-1 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 cursor-pointer"
+                onClick={handleGeneratedImageDownload}
               >
                 <Download className="w-4 h-4" /> Download
               </button>
 
               <button
                 onClick={handleRegenerate}
-                className={`flex-1 ${inputBg} border py-3 rounded-xl font-medium hover:border-purple-400 transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95`}
+                className={`flex-1 ${inputBg} border py-3 rounded-xl font-medium hover:border-purple-400 transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 cursor-pointer`}
               >
                 <RefreshCw className="w-4 h-4" /> Regenerate
               </button>
@@ -84,14 +111,19 @@ export default function Output() {
       <div className="mt-8">
         <h3 className={`text-sm font-medium ${textSecondary} mb-4`}>Recent Generations</h3>
         <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
+          {recentImages.map((url, index) => (
             <div
-              key={i}
-              className={`aspect-video rounded-lg bg-gradient-to-br ${
-                isDarkMode ? "from-zinc-900 to-black border border-zinc-800" : "from-purple-200 to-pink-200"
-              } hover:scale-105 transition-transform duration-300 cursor-pointer shadow-md hover:shadow-lg animate-fadeIn`}
-              style={{ animationDelay: `${i * 0.1}s` }}
-            ></div>
+              key={index}
+              className={`hover:scale-105 transition-transform duration-300 cursor-pointer shadow-md hover:shadow-lg animate-fadeIn`}
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              {/* Image preview */}
+              <img
+                src={url}
+                alt={`Generated ${index + 1}`}
+                className="w-full h-full object-cover rounded-lg"
+              />
+            </div>
           ))}
         </div>
       </div>
