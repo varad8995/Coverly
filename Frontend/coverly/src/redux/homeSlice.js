@@ -3,11 +3,11 @@ import { createSlice } from "@reduxjs/toolkit";
 const initialState = {
     aspectRatio: "16:9",
     platform: "YouTube",
-    provider: "Both",
+    provider: "Gemini",
     prompt: "",
     isGenerating: false,
     hasGenerated: false,
-    isDarkMode: false
+    isDarkMode: true
 }
 
 const homeSlice = createSlice({

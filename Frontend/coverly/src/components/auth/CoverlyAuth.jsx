@@ -32,8 +32,6 @@ export default function CoverlyAuth() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
-        const jwtToken = session.access_token;
-        console.log("JWT Token:", jwtToken);
         dispatch(setUser({ user: session.user, session }));
         navigate("/home");
       }

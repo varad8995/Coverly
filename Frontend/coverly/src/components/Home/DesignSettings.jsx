@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating } from "../../redux/homeSlice";
+import { setImageUrl } from "../../redux/imagesUrlSlice";
 import { Upload, Sparkles, RefreshCw, X } from "lucide-react";
 import { generateThumbnail } from "../../api/apiService";
 
@@ -18,59 +19,109 @@ export default function DesignSettings() {
   const cardBg = isDarkMode ? "bg-neutral-950 backdrop-blur-xl border-neutral-900" : "bg-white/80 backdrop-blur-xl border-purple-200/50";
 
   const fileInputRef = useRef(null);
-  // const [preview, setPreview] = useState(null);
-  const [fileName, setFileName] = useState([]);
-  const [images, setImages] = useState([]);
+  const [preview, setPreview] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [image, setImage] = useState();
+  // const [socket, setSocket] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const wsRef = useRef(null);
 
   const handleGenerate = async () => {
     dispatch(startGenerating());
-    setTimeout(() => {
-      dispatch(finishGenerating());
-    }, 3000);
 
     const formData = new FormData();
     formData.append("aspect_ratio", aspectRatio);
     formData.append("platform", platform);
     formData.append("generator_provider", provider);
     formData.append("user_query", prompt);
-    images.forEach((file) => {
-      formData.append("reference_images", file);
-    });
-    console.log("FormData entries:");
-    for (const [key, value] of formData.entries()) {
-      console.log(key, value);
-    }
+    formData.append("reference_images", image);
 
     try {
       const data = await generateThumbnail(formData);
-      console.log("Generated Thumbnail Data:", data);
+
+      const { job_id } = data;
+      if (job_id) {
+        connectWebSocket(job_id);
+      }
     } catch (err) {
       console.error("Error preparing form data:", err);
     }
   };
 
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    setImages(files);
+  const connectWebSocket = (jobId) => {
+    const wsUrl = import.meta.env.VITE_API_BASE_URL + `/${jobId}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+    // setSocket(ws);
 
-    if (files.length > 0) {
-      const file = files[0];
-      if (file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        // reader.onloadend = () => setPreview(reader.result);
-        reader.readAsDataURL(file);
-        setFileName((prev) => [...prev, file.name]);
-      } else {
-        alert("Please select a valid image file (PNG, JPG, JPEG)");
+    ws.onopen = () => {
+      // console.log("WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        // console.log("WebSocket Message:", msg);
+
+        const { progress, status, generated_images } = msg;
+        if (progress !== undefined) setProgress(progress);
+
+        if (generated_images && Array.isArray(generated_images) && generated_images.length > 0) {
+          console.log(generated_images[0]);
+          dispatch(setImageUrl(generated_images[0]));
+        }
+
+        if (progress === 100 && generated_images?.length > 0 && status === "completed") {
+          // console.log("Thumbnail generation complete 🎉 Closing socket...");
+          ws.close();
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
       }
+    };
+
+    ws.onclose = () => {
+      dispatch(finishGenerating());
+      // console.log("WebSocket disconnected");
+    };
+
+    ws.onerror = (error) => {
+      dispatch(finishGenerating());
+      console.error("WebSocket error:", error);
+    };
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    setImage(file);
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPreview(reader.result);
+      reader.readAsDataURL(file);
+      setFileName(file.fileName);
+    } else {
+      alert("Please select a valid image file (PNG, JPG, JPEG)");
     }
   };
 
   const removeImage = () => {
-    // setPreview(null);
-    setFileName([]);
+    setPreview(null);
+    setFileName("");
+    setImage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   return (
     <div className={`${cardBg} border rounded-3xl p-8 shadow-xl`}>
@@ -140,7 +191,7 @@ export default function DesignSettings() {
           className="border-2 border-dashed rounded-xl p-8 text-center hover:border-purple-400 transition-all duration-300 cursor-pointer group"
           onClick={() => fileInputRef.current.click()}
         >
-          {/* {preview ? (
+          {preview ? (
             <div className="relative inline-block w-full">
               <img
                 src={preview}
@@ -158,19 +209,18 @@ export default function DesignSettings() {
               </button>
               <p className="text-sm mt-2 text-gray-600">{fileName}</p>
             </div>
-          ) : ( */}
-          <>
-            <Upload className="w-8 h-8 mx-auto mb-3 text-gray-400 group-hover:text-purple-500 transition-colors" />
-            <p className="text-sm text-gray-500 mb-1">Click to upload your image</p>
-            <p className="text-xs text-gray-400 opacity-60">PNG, JPG up to 10MB</p>
-          </>
-          {/* )} */}
+          ) : (
+            <>
+              <Upload className="w-8 h-8 mx-auto mb-3 text-gray-400 group-hover:text-purple-500 transition-colors" />
+              <p className="text-sm text-gray-500 mb-1">Click to upload your image</p>
+              <p className="text-xs text-gray-400 opacity-60">PNG, JPG up to 10MB</p>
+            </>
+          )}
         </div>
 
         <input
           type="file"
           accept="image/*"
-          multiple
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
