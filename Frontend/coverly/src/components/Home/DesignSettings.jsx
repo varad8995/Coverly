@@ -49,7 +49,7 @@ export default function DesignSettings() {
   };
 
   const connectWebSocket = (jobId) => {
-    const wsUrl = import.meta.env.VITE_API_BASE_URL + `/${jobId}`;
+    const wsUrl = import.meta.env.VITE_WS_BASE_URL + `/${jobId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
     // setSocket(ws);
