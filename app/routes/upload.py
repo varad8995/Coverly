@@ -77,18 +77,22 @@ async def upload_prompt_with_images(
 
     try:
         if reference_images:
-            upload_tasks = [
-                upload_to_s3(job_id, img.file, img.filename, img.content_type or "image/jpeg")
-                for img in reference_images
-            ]
-            results = await asyncio.gather(*upload_tasks, return_exceptions=True)
-
-            for i, res in enumerate(results):
-                if isinstance(res, Exception):
-                    logger.error(f"[Upload Error] {reference_images[i].filename}: {res}")
-                    continue
-                if res:
-                    image_urls.append(res)
+                # Create a single task list containing the single file operation
+                upload_tasks = [
+                    upload_to_s3(
+                        job_id, 
+                        reference_images.file, 
+                        reference_images.filename, 
+                        reference_images.content_type or "image/jpeg"
+                    )
+                ]
+                
+                results = await asyncio.gather(*upload_tasks, return_exceptions=True)
+                
+                if results and not isinstance(results[0], Exception):
+                    image_urls.append(results[0])
+                elif results and isinstance(results[0], Exception):
+                    logger.error(f"[Upload Error] {reference_images.filename}: {results[0]}")
 
         if not user_query and not image_urls:
             raise HTTPException(
