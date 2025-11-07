@@ -111,7 +111,10 @@ async def refine_prompt_node(state: ThumbnailState) -> dict:
         return {"refined_prompt": refined_prompt, "title": title, "status": "refined"}
 
     except Exception as e:
+        print(f"[Error] refine_prompt_node: {e}")
         await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        await publish_job_update(job_id, "refining_prompt", progress=10, message=f"failed to refine prompt - {e}")
+
         print(f"[Error] refine_prompt_node: {e}")
         return {"status": "failed"}
 
@@ -131,6 +134,7 @@ async def fetch_youtube_node(state: ThumbnailState) -> dict:
         return {"youtube_examples": videos, "status": "videos_fetched"}
     except Exception as e:
         await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        await publish_job_update(job_id, "fetching_youtube", progress=30, message=f"failed to fetch YouTube references - {e}")
         print(f"[Error] fetch_youtube_node: {e}")
         return {"status": "failed"}
 
@@ -141,7 +145,7 @@ async def generate_openai_node(state: ThumbnailState) -> dict:
     ref_images = state.get("reference_images", [])
     try:
         await publish_job_update(job_id, "generating_openai", progress=60, message="Generating thumbnail with OpenAI...")
-        image_base64 = await thumbnail_generation(prompt, ref_images, [], aspect_ratio=state.get("aspect_ratio", "16:9"))
+        image_base64 = await thumbnail_generation(prompt, ref_images, [], aspect_ratio=state.get("aspect_ratio", "16:9"),platform=state.get("platform", "YouTube"))
 
         signed_url, s3_key = upload_base64_to_s3(image_base64, job_id)
         cache_key = await compute_cache_key(prompt, ref_images, "openai")
@@ -153,8 +157,9 @@ async def generate_openai_node(state: ThumbnailState) -> dict:
         return {"generated_images": [signed_url], "status": "completed"}
 
     except Exception as e:
-        await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
         print(f"[Error] generate_openai_node: {e}")
+        await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        await publish_job_update(job_id, "generating_openai", progress=60, message=f"failed to generate thumbnail via OpenAI - {e}")
         return {"status": "failed"}
 
 @traceable(name="Generate Gemini Node")
@@ -176,7 +181,7 @@ async def generate_gemini_node(state: ThumbnailState) -> dict:
             await db_update("thumbnail_prompts", {"generated_images_gemini": presigned_urls, "status": "completed"}, job_id)
             return {"generated_images_gemini": presigned_urls, "status": "completed"}
 
-        result = await thumbnail_generation_gemini(prompt, ref_images, youtube_examples, job_id, aspect_ratio=state.get("aspect_ratio", "16:9"))
+        result = await thumbnail_generation_gemini(prompt, ref_images, youtube_examples, job_id, aspect_ratio=state.get("aspect_ratio", "16:9"),platform=state.get("platform", "YouTube"))
         image_urls = result["image_urls"]
 
         await redis_conn.setex(f"img_cache:{cache_key}", 7 * 24 * 3600, json.dumps({"s3_keys": image_urls}))
@@ -187,6 +192,7 @@ async def generate_gemini_node(state: ThumbnailState) -> dict:
 
     except Exception as e:
         await db_update("thumbnail_prompts", {"status": "failed"}, job_id)
+        await publish_job_update(job_id, "generating_gemini", progress=60, message=f"failed to generate thumbnail via Gemini - {e}")
         print(f"[Gemini Node Error] Job {job_id} failed: {e}")
         return {"status": "failed"}
 
