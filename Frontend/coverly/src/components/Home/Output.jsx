@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Sparkles, Download, RefreshCw, Image } from "lucide-react";
 import { resetGeneration } from "../../redux/homeSlice";
@@ -16,15 +16,35 @@ export default function Output() {
   const textSecondary = isDarkMode ? "text-neutral-500" : "text-gray-600";
   const inputBg = isDarkMode ? "bg-black border-neutral-900 text-white" : "bg-white border-purple-200 text-gray-900";
 
+  useEffect(() => {
+    const storedRecentImages = localStorage.getItem("recentImages");
+    if (storedRecentImages) {
+      const parsedImages = JSON.parse(storedRecentImages);
+      if (parsedImages && Array.isArray(parsedImages)) {
+        dispatch({ type: "imagesurl/setRecentImages", payload: parsedImages });
+      }
+    }
+  }, [dispatch]);
+
   const handleRegenerate = () => {
     dispatch(resetGeneration());
     dispatch(resetImageUrl());
   };
 
-  const handleDownload = (url) => {
+  function toDataURL(url) {
+    return fetch(url)
+      .then((response) => {
+        return response.blob();
+      })
+      .then((blob) => {
+        return URL.createObjectURL(blob);
+      });
+  }
+
+  const handleDownload = async (url) => {
     try {
       const link = document.createElement("a");
-      link.href = url;
+      link.href = await toDataURL(url);
       link.setAttribute("download", `thumbnail_${Date.now()}.png`);
       document.body.appendChild(link);
       link.click();
@@ -114,6 +134,7 @@ export default function Output() {
           {recentImages.map((url, index) => (
             <div
               key={index}
+              onClick={() => handleDownload(url)}
               className={`hover:scale-105 transition-transform duration-300 cursor-pointer shadow-md hover:shadow-lg animate-fadeIn`}
               style={{ animationDelay: `${index * 0.1}s` }}
             >
@@ -121,7 +142,8 @@ export default function Output() {
               <img
                 src={url}
                 alt={`Generated ${index + 1}`}
-                className="w-full h-full object-cover rounded-lg"
+                loading="lazy"
+                className="w-full h-full object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
               />
             </div>
           ))}
