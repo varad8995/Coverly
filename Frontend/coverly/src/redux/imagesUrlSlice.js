@@ -10,13 +10,14 @@ const imagesUrlSlice = createSlice({
     initialState,
     reducers: {
         setImageUrl: (state, action) => {
-            state.newImage = action.payload;
-            // state.recentImages = [...state.recentImages, state.newImage];
             if (action.payload) {
+                state.newImage = action.payload;
+                // state.recentImages = [...state.recentImages, state.newImage];
                 state.recentImages.unshift(action.payload);
                 if (state.recentImages.length > 3) {
                     state.recentImages = state.recentImages.slice(0, 3);
                 }
+                localStorage.setItem("recentImages", JSON.stringify(state.recentImages));
             }
         },
         setRecentImages: (state, action) => {

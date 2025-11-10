@@ -4,7 +4,8 @@ import { useDispatch, useSelector } from "react-redux";
 import "../../styles/coverlyAuth.css";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../api/supabaseClient.js";
-import { setLoading, setUser, clearUser, setError } from "../../redux/authSlice.js";
+import { setUser, clearUser, setError } from "../../redux/authSlice.js";
+import { showLoader, hideLoader } from "../../redux/homeSlice.js";
 
 export default function CoverlyAuth() {
   const dispatch = useDispatch();
@@ -27,18 +28,6 @@ export default function CoverlyAuth() {
   const inputBg = isDarkMode ? "bg-black border-neutral-900 text-white" : "bg-white border-purple-200 text-gray-900";
 
   useEffect(() => {
-    const getSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        dispatch(setUser({ user: session.user, session }));
-        navigate("/home");
-      }
-    };
-
-    getSession();
-
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         dispatch(setUser({ user: session.user, session }));
@@ -52,7 +41,7 @@ export default function CoverlyAuth() {
   }, [dispatch, navigate]);
 
   const handleGoogleLogin = async () => {
-    dispatch(setLoading(true));
+    dispatch(showLoader());
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -66,7 +55,7 @@ export default function CoverlyAuth() {
       console.error("Login error:", error.message);
     }
 
-    dispatch(setLoading(false));
+    dispatch(hideLoader());
   };
 
   const handleSubmit = () => {
