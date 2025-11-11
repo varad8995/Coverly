@@ -7,7 +7,8 @@ const initialState = {
     prompt: "",
     isGenerating: false,
     hasGenerated: false,
-    isDarkMode: true
+    isDarkMode: true,
+    loading: false,
 }
 
 const homeSlice = createSlice({
@@ -39,6 +40,12 @@ const homeSlice = createSlice({
         resetGeneration: (state) => {
             state.hasGenerated = false;
         },
+        showLoader: (state) => {
+            state.loading = true;
+        },
+        hideLoader: (state) => {
+            state.loading = false;
+        }
     },
 });
 
@@ -51,6 +58,8 @@ export const {
     startGenerating,
     finishGenerating,
     resetGeneration,
+    showLoader,
+    hideLoader
 } = homeSlice.actions;
 
 export default homeSlice.reducer;

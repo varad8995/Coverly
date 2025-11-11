@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating } from "../../redux/homeSlice";
+import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating, showLoader, hideLoader } from "../../redux/homeSlice";
 import { setImageUrl } from "../../redux/imagesUrlSlice";
 import { Upload, Sparkles, RefreshCw, X } from "lucide-react";
 import { generateThumbnail } from "../../api/apiService";
@@ -22,11 +22,12 @@ export default function DesignSettings() {
   const [preview, setPreview] = useState(null);
   const [fileName, setFileName] = useState("");
   const [image, setImage] = useState();
-  // const [socket, setSocket] = useState(null);
+  const [socket, setSocket] = useState(null);
   const [progress, setProgress] = useState(0);
   const wsRef = useRef(null);
 
   const handleGenerate = async () => {
+    dispatch(showLoader());
     dispatch(startGenerating());
 
     const formData = new FormData();
@@ -41,10 +42,14 @@ export default function DesignSettings() {
 
       const { job_id } = data;
       if (job_id) {
+        console.log("Starting WebSocket connection for job ID:", job_id);
         connectWebSocket(job_id);
       }
     } catch (err) {
       console.error("Error preparing form data:", err);
+    } finally {
+      dispatch(hideLoader());
+      dispatch(finishGenerating());
     }
   };
 
@@ -52,19 +57,20 @@ export default function DesignSettings() {
     const wsUrl = import.meta.env.VITE_WS_BASE_URL + `/${jobId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
-    // setSocket(ws);
+    setSocket(ws);
 
     ws.onopen = () => {
-      // console.log("WebSocket connected");
+      console.log("WebSocket connected");
     };
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        // console.log("WebSocket Message:", msg);
+        console.log("WebSocket Message:", msg);
 
         const { progress, status, generated_images } = msg;
         if (progress !== undefined) setProgress(progress);
+        console.log(`Progress: ${progress}`);
 
         if (generated_images && Array.isArray(generated_images) && generated_images.length > 0) {
           console.log(generated_images[0]);
@@ -72,7 +78,7 @@ export default function DesignSettings() {
         }
 
         if (progress === 100 && generated_images?.length > 0 && status === "completed") {
-          // console.log("Thumbnail generation complete 🎉 Closing socket...");
+          console.log("Thumbnail generation complete 🎉 Closing socket...");
           ws.close();
         }
       } catch (error) {
@@ -82,7 +88,7 @@ export default function DesignSettings() {
 
     ws.onclose = () => {
       dispatch(finishGenerating());
-      // console.log("WebSocket disconnected");
+      console.log("WebSocket disconnected");
     };
 
     ws.onerror = (error) => {
@@ -140,7 +146,7 @@ export default function DesignSettings() {
               onClick={() => dispatch(setAspectRatio(ratio))}
               className={`py-3 px-4 rounded-xl font-medium ${
                 aspectRatio === ratio ? "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white" : `${inputBg} border hover:border-purple-400`
-              } transition-all duration-300`}
+              } transition-all duration-300 cursor-pointer`}
             >
               {ratio}
             </button>
@@ -158,7 +164,7 @@ export default function DesignSettings() {
               onClick={() => dispatch(setPlatform(plat))}
               className={`py-3 px-4 rounded-xl font-medium ${
                 platform === plat ? "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white" : `${inputBg} border hover:border-purple-400`
-              } transition-all duration-300`}
+              } transition-all duration-300 cursor-pointer`}
             >
               {plat}
             </button>
@@ -176,7 +182,7 @@ export default function DesignSettings() {
               onClick={() => dispatch(setProvider(prov))}
               className={`py-3 px-4 rounded-xl font-medium ${
                 provider === prov ? "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white" : `${inputBg} border hover:border-purple-400`
-              } transition-all duration-300`}
+              } transition-all duration-300 cursor-pointer`}
             >
               {prov}
             </button>
@@ -186,9 +192,9 @@ export default function DesignSettings() {
 
       {/* Image Upload */}
       <div className="mb-6">
-        <label className={`block text-sm font-medium ${textSecondary} mb-3`}>Background Image (Optional)</label>
+        <label className={`block text-sm font-medium ${textSecondary} mb-3`}>Background Image</label>
         <div
-          className="border-2 border-dashed rounded-xl p-8 text-center hover:border-purple-400 transition-all duration-300 cursor-pointer group"
+          className="relative rounded-xl p-8 text-center border-2 border-dashed border-purple-500 hover:border-purple-300 transition-all duration-300 cursor-pointer group overflow-hidden"
           onClick={() => fileInputRef.current.click()}
         >
           {preview ? (
@@ -241,7 +247,7 @@ export default function DesignSettings() {
       <button
         onClick={handleGenerate}
         disabled={isGenerating}
-        className="w-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50"
+        className="w-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 cursor-pointer"
       >
         {isGenerating ? (
           <>

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Moon, Sun } from "lucide-react";
-import { toggleDarkMode } from "../../redux/homeSlice";
+import { toggleDarkMode, showLoader, hideLoader } from "../../redux/homeSlice";
 import { useNavigate } from "react-router-dom";
 import { Menu, MenuItem } from "@mui/material";
 import Box from "@mui/material/Box";
@@ -33,10 +33,13 @@ export default function ModeToggle() {
   };
 
   const handleLogout = async () => {
+    dispatch(showLoader());
     setAnchorEl(null);
     await supabase.auth.signOut();
     dispatch(clearUser());
+    localStorage.removeItem("recentImages");
     navigate("/");
+    dispatch(hideLoader());
   };
 
   return (
@@ -59,13 +62,9 @@ export default function ModeToggle() {
             aria-expanded={open ? "true" : undefined}
           >
             <img
-              src={user?.user_metadata?.avatar_url || "/userDark.png"}
+              src={user.user_metadata.avatar_url}
               alt="Profile"
               className="w-12 h-12 rounded-full border border-gray-300 dark:border-zinc-700 shadow-sm object-cover ml-auto"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = "/userDark.png";
-              }}
             />
           </IconButton>
         </Tooltip>
