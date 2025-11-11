@@ -7,3 +7,5 @@ class UploadPromptRequest(BaseModel):
         default_factory=list,
         description="List of reference image URLs (optional)"
     )
+    remaining_credits: int = Field(..., description="User's remaining credits after this upload")
+    job_id: str = Field(..., description="Unique identifier for the thumbnail generation job")

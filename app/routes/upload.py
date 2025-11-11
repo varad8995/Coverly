@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, status, Depends
 from typing import List, Optional
-from ..services.queue import enqueue_job
+from ..db.queue_connection import enqueue_job
 from ..db.s3_storage import upload_to_s3
 from ..db.supabase_client import supabase
 from ..models.upload_prompt import UploadPromptRequest
@@ -53,11 +53,11 @@ async def upload_prompt_with_images(
     aspect_ratio: Optional[str] = Form("16:9"),
     platform: Optional[str] = Form("YouTube"),
     generator_provider: Optional[str] = Form("openai"),
-    reference_images: Optional[List[UploadFile]] = File(None),
+    reference_images: Optional[UploadFile] = File(None),
 
     user=Depends(verify_supabase_token)  
 ):
-    user_id = user['sub']
+    user_id = user['id']
     provider = user.get("app_metadata", {}).get("provider", "unknown")
 
     initialize_user_credits(user_id)
@@ -77,18 +77,22 @@ async def upload_prompt_with_images(
 
     try:
         if reference_images:
-            upload_tasks = [
-                upload_to_s3(job_id, img.file, img.filename, img.content_type or "image/jpeg")
-                for img in reference_images
-            ]
-            results = await asyncio.gather(*upload_tasks, return_exceptions=True)
-
-            for i, res in enumerate(results):
-                if isinstance(res, Exception):
-                    logger.error(f"[Upload Error] {reference_images[i].filename}: {res}")
-                    continue
-                if res:
-                    image_urls.append(res)
+                # Create a single task list containing the single file operation
+                upload_tasks = [
+                    upload_to_s3(
+                        job_id, 
+                        reference_images.file, 
+                        reference_images.filename, 
+                        reference_images.content_type or "image/jpeg"
+                    )
+                ]
+                
+                results = await asyncio.gather(*upload_tasks, return_exceptions=True)
+                
+                if results and not isinstance(results[0], Exception):
+                    image_urls.append(results[0])
+                elif results and isinstance(results[0], Exception):
+                    logger.error(f"[Upload Error] {reference_images.filename}: {results[0]}")
 
         if not user_query and not image_urls:
             raise HTTPException(
@@ -115,7 +119,7 @@ async def upload_prompt_with_images(
             raise HTTPException(status_code=500, detail="Database insertion failed.")
 
         job_data = {
-            "id": job_id,
+            "job_id": job_id,
             "type": "upload_prompt",
             "reference_images": image_urls,
             "user_prompt": user_query,
@@ -127,7 +131,8 @@ async def upload_prompt_with_images(
         return UploadPromptRequest(
             user_query=user_query,
             reference_images=image_urls,
-            remaining_credits=remaining_credits
+            remaining_credits=remaining_credits,
+            job_id=job_id
         )
 
     except HTTPException:

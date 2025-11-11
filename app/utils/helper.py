@@ -110,13 +110,23 @@ def upload_base64_to_s3(image_base64: str, job_id: str) -> str:
 
 CHANNEL = "thumbnail_updates"
 
-async def publish_job_update(job_id: str, status: str, generated_images=None):
+async def publish_job_update(
+    job_id: str,
+    status: str,
+    progress: int | None = None,
+    message: str | None = None,
+    generated_images: list[str] | None = None
+):
     """
-    Publishes a job update to Redis so frontend can get real-time updates.
+    Publishes structured job updates to Redis for frontend real-time updates.
     """
-    message = {
+    payload = {
         "job_id": job_id,
-        "status": status,
-        "generated_images": generated_images or []
+        "status": status,            
+        "progress": progress,         
+        "message": message,           
+        "generated_images": generated_images or []  
     }
-    await redis_conn.publish(CHANNEL, json.dumps(message))
+
+    await redis_conn.publish(CHANNEL, json.dumps(payload))
+    print(f"[Worker] Published update: {payload}")
