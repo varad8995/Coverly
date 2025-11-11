@@ -32,6 +32,7 @@ export default function CoverlyAuth() {
       if (session) {
         dispatch(setUser({ user: session.user, session }));
         navigate("/home");
+        console.log(session.access_token);
       } else {
         dispatch(clearUser());
       }
