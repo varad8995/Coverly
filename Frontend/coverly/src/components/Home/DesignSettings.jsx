@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating, showLoader, hideLoader } from "../../redux/homeSlice";
-import { setImageUrl } from "../../redux/imagesUrlSlice";
+import { setAspectRatio, setPlatform, setProvider, setPrompt, startGenerating, finishGenerating, showLoader, hideLoader, setProgress, setSocketMessage, resetGeneration } from "../../redux/homeSlice";
+import { setImageUrl, resetImageUrl } from "../../redux/imagesUrlSlice";
 import { Upload, Sparkles, RefreshCw, X } from "lucide-react";
 import { generateThumbnail } from "../../api/apiService";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Modal from "@mui/material/Modal";
 
 export default function DesignSettings() {
   const dispatch = useDispatch();
@@ -23,8 +27,24 @@ export default function DesignSettings() {
   const [fileName, setFileName] = useState("");
   const [image, setImage] = useState();
   const [socket, setSocket] = useState(null);
-  const [progress, setProgress] = useState(0);
   const wsRef = useRef(null);
+
+  const [open, setOpen] = useState(false);
+  const handleOpen = () => setOpen(true);
+  const handleClose = () => setOpen(false);
+  const [alertMessage, setAlertMessage] = useState("");
+
+  const style = {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    width: 400,
+    bgcolor: "background.paper",
+    border: "2px solid #000",
+    boxShadow: 24,
+    p: 4,
+  };
 
   const handleGenerate = async () => {
     dispatch(showLoader());
@@ -38,18 +58,29 @@ export default function DesignSettings() {
     formData.append("reference_images", image);
 
     try {
-      const data = await generateThumbnail(formData);
+      const response = await generateThumbnail(formData);
 
-      const { job_id } = data;
+      if (!response.success) {
+        handleOpen();
+        dispatch(finishGenerating());
+        dispatch(resetGeneration());
+        dispatch(resetImageUrl());
+        dispatch(setProgress(5));
+        dispatch(hideLoader());
+        setAlertMessage(response.message);
+        return;
+      }
+
+      const { job_id } = response.data;
       if (job_id) {
-        console.log("Starting WebSocket connection for job ID:", job_id);
+        console.log(job_id);
         connectWebSocket(job_id);
       }
     } catch (err) {
       console.error("Error preparing form data:", err);
     } finally {
-      dispatch(hideLoader());
-      dispatch(finishGenerating());
+      // dispatch(hideLoader());
+      // dispatch(finishGenerating());
     }
   };
 
@@ -66,11 +97,12 @@ export default function DesignSettings() {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        console.log("WebSocket Message:", msg);
 
-        const { progress, status, generated_images } = msg;
-        if (progress !== undefined) setProgress(progress);
-        console.log(`Progress: ${progress}`);
+        const { progress, status, generated_images, message } = msg;
+        if (progress !== undefined) {
+          dispatch(setProgress(progress));
+          dispatch(setSocketMessage(message || ""));
+        }
 
         if (generated_images && Array.isArray(generated_images) && generated_images.length > 0) {
           console.log(generated_images[0]);
@@ -78,7 +110,6 @@ export default function DesignSettings() {
         }
 
         if (progress === 100 && generated_images?.length > 0 && status === "completed") {
-          console.log("Thumbnail generation complete 🎉 Closing socket...");
           ws.close();
         }
       } catch (error) {
@@ -87,8 +118,10 @@ export default function DesignSettings() {
     };
 
     ws.onclose = () => {
+      dispatch(hideLoader());
       dispatch(finishGenerating());
-      console.log("WebSocket disconnected");
+      dispatch(setProgress(5));
+      dispatch(setSocketMessage("Generating Thumbnail..."));
     };
 
     ws.onerror = (error) => {
@@ -131,6 +164,28 @@ export default function DesignSettings() {
 
   return (
     <div className={`${cardBg} border rounded-3xl p-8 shadow-xl`}>
+      <Modal
+        open={open}
+        onClose={handleClose}
+        aria-labelledby="modal-modal-title"
+        aria-describedby="modal-modal-description"
+      >
+        <Box sx={style}>
+          <Typography
+            id="modal-modal-title"
+            variant="h6"
+            component="h2"
+          >
+            Message
+          </Typography>
+          <Typography
+            id="modal-modal-description"
+            sx={{ mt: 2 }}
+          >
+            You have exhausted your free credits.
+          </Typography>
+        </Box>
+      </Modal>
       <h2 className={`text-xl font-semibold ${textPrimary} mb-6 flex items-center gap-2`}>
         <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse"></div>
         Design Settings
