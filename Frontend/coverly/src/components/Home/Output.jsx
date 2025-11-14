@@ -4,7 +4,6 @@ import { Sparkles, Download, RefreshCw, Image, Loader2 } from "lucide-react";
 import { resetGeneration } from "../../redux/homeSlice";
 import { resetImageUrl } from "../../redux/imagesUrlSlice";
 import "../../styles/animations.css";
-import { downloadPhoto } from "../../api/apiService";
 
 export default function Output() {
   const dispatch = useDispatch();
@@ -32,41 +31,27 @@ export default function Output() {
     dispatch(resetImageUrl());
   };
 
-  function toDataURL(url) {
-    return fetch(url)
-      .then((response) => {
-        return response.blob();
-      })
-      .then((blob) => {
-        return URL.createObjectURL(blob);
-      });
-  }
-
-  const handleDownload = async (url) => {
+  // ⭐ INSTANT, STREAMED DOWNLOAD — no waiting, no fetch, no blob
+  const handleDownload = (url) => {
     try {
-      await downloadPhoto(url);
-      // const link = document.createElement("a");
-      // link.href = await toDataURL(url);
-      // link.setAttribute("download", `thumbnail_${Date.now()}.png`);
-      // document.body.appendChild(link);
-      // link.click();
-      // link.remove();
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `thumbnail_${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     } catch (error) {
       console.error("Error downloading image:", error);
     }
   };
 
   const handleGeneratedImageDownload = () => {
-    try {
-      if (!imageUrl) {
-        alert("No image available to download!");
-        return;
-      }
-
-      handleDownload(imageUrl);
-    } catch (err) {
-      console.error("Error downloading the image:", err);
+    if (!imageUrl) {
+      alert("No image available to download!");
+      return;
     }
+
+    handleDownload(imageUrl);
   };
 
   return (
@@ -76,9 +61,10 @@ export default function Output() {
           <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse"></div>
           Your Thumbnail
         </h2>
+
         {isGenerating && (
           <div className="space-y-3 animate-fadeIn">
-            {/* Main Progress Bar */}
+            {/* Progress Bar */}
             <div className={`relative h-3 ${isDarkMode ? "bg-neutral-900" : "bg-gray-200"} rounded-full overflow-hidden`}>
               <div
                 className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 transition-all duration-500 ease-out rounded-full"
@@ -102,6 +88,7 @@ export default function Output() {
 
       {/* Output Area */}
       <div className="relative">
+
         {!hasGenerated && !isGenerating && (
           <div className={`aspect-video rounded-2xl ${inputBg} border-2 border-dashed flex items-center justify-center`}>
             <div className="text-center">
@@ -129,7 +116,6 @@ export default function Output() {
                 alt="Generated Thumbnail"
                 className="w-full h-full object-cover rounded-2xl relative z-10"
               />
-
               <div className="absolute inset-0 bg-black/10"></div>
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shine"></div>
             </div>
@@ -161,10 +147,9 @@ export default function Output() {
             <div
               key={index}
               onClick={() => handleDownload(url)}
-              className={`hover:scale-105 transition-transform duration-300 cursor-pointer shadow-md hover:shadow-lg animate-fadeIn`}
+              className="hover:scale-105 transition-transform duration-300 cursor-pointer shadow-md hover:shadow-lg animate-fadeIn"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              {/* Image preview */}
               <img
                 src={url}
                 alt={`Generated ${index + 1}`}
