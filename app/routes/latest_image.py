@@ -1,13 +1,10 @@
 from fastapi import FastAPI, HTTPException, status
-from supabase import create_client, Client
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
 from ..db.supabase_client import supabase
-import uuid
 import logging
-import asyncio
 
 logger = logging.getLogger("coverly.api")
 router = APIRouter()
