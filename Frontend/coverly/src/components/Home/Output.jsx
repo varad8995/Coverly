@@ -33,7 +33,7 @@ export default function Output() {
 
   const handleDownload = async (presignedUrl) => {
     try {
-      const response = await fetch("https://coverly-hogj.onrender.com/download-photo/", {
+      const response = await fetch("https://coverly-hogj.onrender.com/api/download-photo/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
