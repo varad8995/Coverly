@@ -9,3 +9,4 @@ class UploadPromptRequest(BaseModel):
     )
     remaining_credits: int = Field(..., description="User's remaining credits after this upload")
     job_id: str = Field(..., description="Unique identifier for the thumbnail generation job")
+    user_id: str = Field(..., description="The UUID of the user uploading the prompt")
