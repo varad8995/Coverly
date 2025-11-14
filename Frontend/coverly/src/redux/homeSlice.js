@@ -9,6 +9,8 @@ const initialState = {
     hasGenerated: false,
     isDarkMode: true,
     loading: false,
+    progress: 5,
+    socketMessage: "Generating Thumbnail...",
 }
 
 const homeSlice = createSlice({
@@ -45,6 +47,12 @@ const homeSlice = createSlice({
         },
         hideLoader: (state) => {
             state.loading = false;
+        },
+        setProgress: (state, action) => {
+            state.progress = action.payload;
+        },
+        setSocketMessage: (state, action) => {
+            state.socketMessage = action.payload;
         }
     },
 });
@@ -59,7 +67,9 @@ export const {
     finishGenerating,
     resetGeneration,
     showLoader,
-    hideLoader
+    hideLoader,
+    setProgress,
+    setSocketMessage
 } = homeSlice.actions;
 
 export default homeSlice.reducer;
