@@ -20,7 +20,7 @@ export default function Output() {
     const storedRecentImages = localStorage.getItem("recentImages");
     if (storedRecentImages) {
       const parsedImages = JSON.parse(storedRecentImages);
-      if (parsedImages && Array.isArray(parsedImages)) {
+      if (Array.isArray(parsedImages)) {
         dispatch({ type: "imagesurl/setRecentImages", payload: parsedImages });
       }
     }
@@ -31,17 +31,35 @@ export default function Output() {
     dispatch(resetImageUrl());
   };
 
-  // ⭐ INSTANT, STREAMED DOWNLOAD — no waiting, no fetch, no blob
-  const handleDownload = (url) => {
+  const handleDownload = async (presignedUrl) => {
     try {
+      const response = await fetch("https://coverly-hogj.onrender.com/download-photo/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ presigned_url: presignedUrl })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to download file");
+      }
+
+      // Convert StreamingResponse to Blob
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Trigger browser download
       const link = document.createElement("a");
-      link.href = url;
+      link.href = blobUrl;
       link.download = `thumbnail_${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       link.remove();
+
+      URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      console.error("Error downloading image:", error);
+      console.error("Download error:", error);
     }
   };
 
@@ -50,7 +68,6 @@ export default function Output() {
       alert("No image available to download!");
       return;
     }
-
     handleDownload(imageUrl);
   };
 
@@ -64,7 +81,7 @@ export default function Output() {
 
         {isGenerating && (
           <div className="space-y-3 animate-fadeIn">
-            {/* Progress Bar */}
+            {/* Progress bar */}
             <div className={`relative h-3 ${isDarkMode ? "bg-neutral-900" : "bg-gray-200"} rounded-full overflow-hidden`}>
               <div
                 className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 transition-all duration-500 ease-out rounded-full"
@@ -74,7 +91,7 @@ export default function Output() {
               </div>
             </div>
 
-            {/* Progress Info */}
+            {/* Progress info */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
@@ -86,9 +103,8 @@ export default function Output() {
         )}
       </div>
 
-      {/* Output Area */}
+      {/* Output area */}
       <div className="relative">
-
         {!hasGenerated && !isGenerating && (
           <div className={`aspect-video rounded-2xl ${inputBg} border-2 border-dashed flex items-center justify-center`}>
             <div className="text-center">
@@ -139,7 +155,7 @@ export default function Output() {
         )}
       </div>
 
-      {/* Recent Generations */}
+      {/* Recent Generated Images */}
       <div className="mt-8">
         <h3 className={`text-sm font-medium ${textSecondary} mb-4`}>Recent Generations</h3>
         <div className="grid grid-cols-3 gap-3">
