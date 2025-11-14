@@ -1,13 +1,14 @@
 import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Sparkles, Download, RefreshCw, Image } from "lucide-react";
+import { Sparkles, Download, RefreshCw, Image, Loader2 } from "lucide-react";
 import { resetGeneration } from "../../redux/homeSlice";
 import { resetImageUrl } from "../../redux/imagesUrlSlice";
 import "../../styles/animations.css";
+import { downloadPhoto } from "../../api/apiService";
 
 export default function Output() {
   const dispatch = useDispatch();
-  const { isGenerating, hasGenerated, isDarkMode } = useSelector((state) => state.home);
+  const { isGenerating, hasGenerated, isDarkMode, progress, socketMessage } = useSelector((state) => state.home);
   const imageUrl = useSelector((state) => state.imagesurl.newImage);
   const recentImages = useSelector((state) => state.imagesurl.recentImages);
 
@@ -43,12 +44,13 @@ export default function Output() {
 
   const handleDownload = async (url) => {
     try {
-      const link = document.createElement("a");
-      link.href = await toDataURL(url);
-      link.setAttribute("download", `thumbnail_${Date.now()}.png`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      await downloadPhoto(url);
+      // const link = document.createElement("a");
+      // link.href = await toDataURL(url);
+      // link.setAttribute("download", `thumbnail_${Date.now()}.png`);
+      // document.body.appendChild(link);
+      // link.click();
+      // link.remove();
     } catch (error) {
       console.error("Error downloading image:", error);
     }
@@ -69,10 +71,34 @@ export default function Output() {
 
   return (
     <div className={`${cardBg} border rounded-3xl p-8 shadow-xl transition-all duration-500 animate-slideInRight right-output-section`}>
-      <h2 className={`text-xl font-semibold ${textPrimary} mb-6 flex items-center gap-2`}>
-        <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse"></div>
-        Your Thumbnail
-      </h2>
+      <div className="mb-6">
+        <h2 className={`text-xl font-semibold ${textPrimary} mb-6 flex items-center gap-2`}>
+          <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse"></div>
+          Your Thumbnail
+        </h2>
+        {isGenerating && (
+          <div className="space-y-3 animate-fadeIn">
+            {/* Main Progress Bar */}
+            <div className={`relative h-3 ${isDarkMode ? "bg-neutral-900" : "bg-gray-200"} rounded-full overflow-hidden`}>
+              <div
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 transition-all duration-500 ease-out rounded-full"
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+              </div>
+            </div>
+
+            {/* Progress Info */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+                <span className={`text-sm font-medium ${textPrimary}`}>{socketMessage}</span>
+              </div>
+              <span className={`text-sm font-bold ${textPrimary}`}>{Math.round(progress)}%</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Output Area */}
       <div className="relative">
