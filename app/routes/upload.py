@@ -59,7 +59,6 @@ async def upload_prompt_with_images(
 ):
     user_id = user['id']
     provider = user.get("app_metadata", {}).get("provider", "unknown")
-
     initialize_user_credits(user_id)
     remaining_credits = get_user_credits(user_id)
 
@@ -132,7 +131,8 @@ async def upload_prompt_with_images(
             user_query=user_query,
             reference_images=image_urls,
             remaining_credits=remaining_credits,
-            job_id=job_id
+            job_id=job_id,
+            user_id=user_id
         )
 
     except HTTPException:
