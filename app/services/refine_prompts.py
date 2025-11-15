@@ -30,7 +30,12 @@ async def refine_prompt(user_prompt: str,aspect_ratio=str,platform=str) -> str:
     - Preserve any reference images exactly (do not alter faces or main elements).
     - Add necessary context or details to increase relevance.
     - Specify steps if applicable.
+    - Use futuristic, high-contrast tech color palettes:
+        - neon cyan + deep navy, purple + electric blue, teal + black, lime + charcoal, blue + white. , white + yellow 
+        - Title: 3–5 bold, modern tech words, using clean sans-serif fonts (Inter, Montserrat, Poppins, SF Pro).
     - Use best Font's with good colour scehme anf styling
+    - Keep ALL text, graphics, icons, subjects, and visual elements fully inside the template boundaries. NOTHING should be cropped, clipped, or cut off.
+    - Leave comfortable padding on all sides.
     - Provide an example or template for the desired output format.
 
     Refine the original prompt following these guidelines.
@@ -60,6 +65,7 @@ async def extract_title(video_context: str,platform=str) -> str:
 
     Generate a catchy, search-optimized {platform} title that maximizes click-through rate.
     Respond with **only the title**.
+    it should look like a professional {platform} title.
     Should be short and engaging.
     """
     response = client.chat.completions.create(
